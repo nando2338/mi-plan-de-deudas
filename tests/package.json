@@ -1,0 +1,12 @@
+{
+  "name": "mi-plan-de-deudas-tests",
+  "private": true,
+  "description": "Pruebas automatizadas con DOM simulado (jsdom). La app no usa compilación; esto solo se usa para probar.",
+  "scripts": {
+    "test": "node --test --test-concurrency=1 ./*.test.js",
+    "check": "node check-resources.js"
+  },
+  "devDependencies": {
+    "jsdom": "27.4.0"
+  }
+}

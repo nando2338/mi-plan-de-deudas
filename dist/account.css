@@ -1,0 +1,19 @@
+.account-status{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:10px 0 2px}
+.acc-dot{width:10px;height:10px;border-radius:50%;background:#9aa8a0;display:inline-block}
+.acc-dot[data-state="synced"]{background:#2f8a5f}.acc-dot[data-state="syncing"],.acc-dot[data-state="starting"]{background:#d8b44a}
+.acc-dot[data-state="offline"],.acc-dot[data-state="paused"],.acc-dot[data-state="needsChoice"]{background:#d18960}.acc-dot[data-state="error"]{background:#ae4031}
+.account-tabs{display:inline-flex;margin:8px 0}
+.account-form{max-width:420px}.account-form .field input{border:1px solid #d6e1d7;border-radius:9px;padding:10px;width:100%;color:var(--ink);background:#fff}
+.account-form .field label{font-size:12px;font-weight:700;color:#536d5c}
+.account-form .save,.account-option .save{border:0;padding:10px 15px;border-radius:9px;font-weight:700}
+.account-secondary{flex-wrap:wrap}.account-accept{display:block;font-size:13px;margin-top:14px;line-height:1.5}
+.account-accept input{width:18px;height:18px;vertical-align:-3px}
+.account-msg{font-size:13px;color:#536a52;min-height:1em}
+.account-actions{flex-wrap:wrap}.account-pre{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.account-pre a{text-decoration:none;display:inline-block}
+.ghost.danger,.cancel.danger,.save.danger{color:#ae4031;border-color:#efc9c1}.save.danger{background:#ae4031;color:#fff}
+.account-option{border-top:1px solid var(--line);padding:12px 0}.account-option p{margin:6px 0 0}
+.account-dialog .modal{max-height:85vh;overflow:auto}.account-dialog .modalbuttons{flex-wrap:wrap}
+.account-dialog .modalbuttons button{border:0;padding:10px 15px;border-radius:9px;font-weight:700}
+.legal-links a{color:#426b52}#sync-notices ul{margin:0 0 6px;padding-left:18px}
+#account-root button:disabled,.account-dialog button:disabled{opacity:.55;cursor:not-allowed}
