@@ -1,0 +1,13 @@
+/* Storage transaction helpers, no implicit migration. */
+(function(root){'use strict';
+const KEY='nando-deudas-v1', PREFIX='nando-deudas-recovery-v1:';
+function validDebtArray(raw){if(raw===null)return [];let arr;try{arr=JSON.parse(raw)}catch(e){throw new Error('No se pudo leer la información guardada. No modificaremos estos datos.');}if(!Array.isArray(arr))throw new Error('La información guardada no tiene el formato esperado. No modificaremos estos datos.');try{root.DebtBackup.validateBackup(JSON.stringify({version:1,debts:arr}))}catch(e){throw new Error('La información guardada contiene datos que no se pudieron verificar. No modificaremos estos datos.')}return arr}
+function read(store){try{const raw=store.getItem(KEY);return {ok:true,raw,debts:validDebtArray(raw)}}catch(e){let raw=null;try{raw=store.getItem(KEY)}catch(_){}return {ok:false,raw,debts:[],error:e.message||'No se pudo acceder al almacenamiento.'}}}
+function transactionalRestore(store,incoming,makeId){let incomingData=root.DebtBackup.validateBackup(incoming);let existing=read(store);if(!existing.ok)throw new Error('La información actual requiere revisión. No se reemplazó ni se modificó.');let serialized=JSON.stringify(incomingData.debts),snapKey=null;
+// Always retain current exact bytes before changing KEY, even if empty or unknown.
+if(existing.raw!==null){for(let i=0;i<8;i++){const proposal=PREFIX+makeId();if(store.getItem(proposal)===null){snapKey=proposal;break}}if(!snapKey)throw Error('No fue posible crear una copia anterior única.');try{store.setItem(snapKey,existing.raw);if(store.getItem(snapKey)!==existing.raw)throw Error();}catch(e){throw Error('No fue posible proteger una copia anterior. No se restauró el respaldo.')}}
+try{store.setItem(KEY,serialized);if(store.getItem(KEY)!==serialized)throw Error('El almacenamiento no confirmó los datos.')}catch(e){try{if(existing.raw===null)store.removeItem(KEY);else store.setItem(KEY,existing.raw)}catch(_){}throw Error('No se pudo confirmar la restauración; se conservó una copia anterior cuando fue posible.')}
+return {debts:incomingData.debts,count:incomingData.count,snapshot:snapKey};}
+function write(store,debts,makeId,expectedRaw){if(store.getItem('nando-restore-journal-v1')!==null)throw Error('Hay una recuperación pendiente.');if(arguments.length<4||store.getItem(KEY)!==expectedRaw)throw Error('Los datos cambiaron en otra pestaña. No se guardó el cambio.');const raw=JSON.stringify(debts);transactionalRestore(store,JSON.stringify({version:1,debts}),makeId);return raw;}
+root.DebtStorage={read,write,transactionalRestore,KEY,PREFIX};
+})(globalThis);

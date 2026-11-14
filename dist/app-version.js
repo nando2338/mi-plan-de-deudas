@@ -1,0 +1,1 @@
+(()=>{const VERSION='1.0';window.MPDD_VERSION=VERSION;const p=document.createElement('p');p.className='footer';p.style.cssText='font-size:11px;color:#88928b';p.textContent='Versión '+VERSION;(document.querySelector('main')||document.body).append(p)})();
