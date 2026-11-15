@@ -7,7 +7,10 @@ const LIB='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/s
 const NETWORK_FIRST=['/config.js','/privacidad.html','/terminos.html'];
 // Install: download every file fresh (bypassing the HTTP cache) and keep a fresh copy of the
 // home page for offline use. The new version waits until the user taps "Actualizar".
-self.addEventListener('install',event=>event.waitUntil((async()=>{const cache=await caches.open(CACHE);await cache.addAll(ASSETS.map(u=>new Request(u,{cache:'reload'})));try{const r=await fetch(new Request('/',{cache:'reload'}));if(r.ok&&!r.redirected&&(r.headers.get('content-type')||'').includes('text/html'))await cache.put('/offline-home',r)}catch(_){}})()));
+self.addEventListener('install',event=>event.waitUntil((async()=>{const keys=await caches.keys();const cache=await caches.open(CACHE);await cache.addAll(ASSETS.map(u=>new Request(u,{cache:'reload'})));try{const r=await fetch(new Request('/',{cache:'reload'}));if(r.ok&&!r.redirected&&(r.headers.get('content-type')||'').includes('text/html'))await cache.put('/offline-home',r)}catch(_){}
+// Versions before 1.2 (deudas-pwa-*) have no update banner and would serve old scripts
+// with the new page: replace them right away. From 1.2 on, wait for "Actualizar".
+if(keys.some(k=>k.startsWith('deudas-pwa-')))self.skipWaiting()})()));
 self.addEventListener('message',event=>{if(event.data&&event.data.type==='SKIP_WAITING')self.skipWaiting()});
 // Carry the saved offline home page over from the previous cache before removing old caches.
 self.addEventListener('activate',event=>event.waitUntil((async()=>{const keys=await caches.keys(),cache=await caches.open(CACHE);if(!(await cache.match('/offline-home')))for(const k of keys){if(k===CACHE)continue;const old=await(await caches.open(k)).match('/offline-home');if(old){await cache.put('/offline-home',old);break}}await Promise.all(keys.filter(k=>(k.startsWith('deudas-pwa-')||k.startsWith('mpd-cache-'))&&k!==CACHE).map(k=>caches.delete(k)))})()));
@@ -18,6 +21,9 @@ if(url.href===LIB)event.respondWith(caches.open(CACHE).then(cache=>cache.match(L
 return}
 if(req.mode==='navigate'){const home=url.pathname==='/'||url.pathname==='/index.html';
 if(!home&&ASSETS.includes(url.pathname)){event.respondWith(fetch(req).catch(()=>caches.match(url.pathname).then(r=>r||Response.error())));return}
-event.respondWith(fetch(req).then(async response=>{if(home&&response.ok&&!response.redirected&&(response.headers.get('content-type')||'').includes('text/html'))await(await caches.open(CACHE)).put('/offline-home',response.clone());return response}).catch(async()=>await caches.match('/offline-home')||Response.error()));return}
+// Home page: serve the copy saved with THIS version, so the page always matches the cached
+// scripts. A newer version is detected by the update check and applied with "Actualizar".
+if(home){event.respondWith(caches.open(CACHE).then(c=>c.match('/offline-home')).then(cached=>cached||fetch(req).then(async response=>{if(response.ok&&!response.redirected&&(response.headers.get('content-type')||'').includes('text/html'))await(await caches.open(CACHE)).put('/offline-home',response.clone());return response})).catch(async()=>await caches.match('/offline-home')||Response.error()));return}
+event.respondWith(fetch(req).catch(async()=>await caches.match('/offline-home')||Response.error()));return}
 if(NETWORK_FIRST.includes(url.pathname)){event.respondWith(fetch(req).then(async r=>{if(r.ok)await(await caches.open(CACHE)).put(url.pathname,r.clone());return r}).catch(()=>caches.match(url.pathname).then(r=>r||Response.error())));return}
 if(ASSETS.includes(url.pathname))event.respondWith(caches.open(CACHE).then(cache=>cache.match(url.pathname)).then(cached=>cached||fetch(req)))});

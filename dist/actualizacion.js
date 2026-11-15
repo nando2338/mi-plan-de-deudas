@@ -36,7 +36,7 @@
     if (accepted) {
       reloading = true;
       location.reload();
-    } else banner(T.reloadHint, T.reload, () => location.reload());
+    } else banner(T.available, T.update, () => location.reload());
   });
   function watch(reg) {
     if (!reg) return;

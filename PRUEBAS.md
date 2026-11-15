@@ -1,5 +1,39 @@
 # Comprobaciones
 
+## Versión 1.2 (rama `version-1.2`, 15 de noviembre de 2026)
+
+Ejecutar: `cd tests && npm install && npm test` (48 pruebas) y `npm run check`.
+
+`tests/version-1-2.test.js` (19 pruebas nuevas). **Aprobado:**
+- `formatMoney`: `US$1,250.00 USD`, `$1.250.000 COP`, negativos y redondeo; ninguna otra parte de la app formatea montos con `Intl.NumberFormat`.
+- Inicio: una línea por moneda, solo las que existen, ninguna mezcla USD y COP; lista agrupada por moneda.
+- La moneda de Ajustes solo cambia la propuesta para deudas nuevas; las existentes conservan la suya.
+- Formulario: cuota mensual y categoría opcionales; el pago propone la cuota y la fecha de vencimiento del mes; guarda fecha de pago y de vencimiento; "Pagado tarde" cuando corresponde.
+- Estados: a tiempo, tarde, pendiente, vencido; meses cortos (día 31 → 28 de febrero); deuda pagada sin cuotas nuevas; pagos antiguos sin fecha de vencimiento.
+- Calendario: naranja hoy, rojo vencido, blanco sin pagos, resumen por moneda, tocar un día, "Marcar como pagado" con el formulario existente y cambio de mes.
+- Gráfico: dona USD sin COP y viceversa, total en el centro, por deuda y por categoría, rango de fechas y aviso si "Desde" > "Hasta", lista con estado, monto y moneda.
+- Recordatorios: opciones 1/3/7 y hora se guardan; el contador rojo coincide con el cálculo; sin soporte del navegador, el interruptor explica y no se activa.
+- CSV: encabezados, monto limpio (`1250.50`, `1250000`), columna Moneda, comillas y protección contra fórmulas.
+- Datos de la 1.1 se cargan sin cambios; los campos nuevos pasan la validación de respaldos y viajan a la nube en `extra` sin cambios fantasma.
+- Todos los textos nuevos tienen traducción en `i18n.js`; inicio, calendario, gráfico, ajustes y las 7 pestañas en inglés.
+- Aviso "Nueva versión disponible – Actualizar" y envío de `SKIP_WAITING`; caché `mpd-cache-v1.2`, limpieza de cachés viejos, descarga sin caché HTTP; `netlify.toml` con `publish = "dist"` y sin caché para `/`, `/index.html` y `/sw.js`; versión 1.2 visible.
+
+Las 29 pruebas anteriores (cuentas, sincronización, modo sin cuenta, recuperación, i18n) siguen aprobadas, ajustando una a la nueva línea del total.
+
+### Base de datos (proyecto `mi-plan-de-deudas-dev`)
+
+- Antes de cambiar nada se guardó `supabase/respaldo-v1.1.sql`, leído del catálogo de la base (tablas, restricciones, 12 políticas RLS, funciones y triggers, más el esquema previo `debt_private`).
+- Migración aplicada con confirmación del dueño: `v1_2_fecha_vencimiento_pagos` (columna `payments.due_on`, trigger y índice; `debts.currency` ya existía).
+- Prueba en transacción revertida con usuarios ficticios: `due_on` se llena desde la fecha de vencimiento enviada por la app; fechas imposibles quedan vacías; el otro usuario sigue sin ver filas ajenas; la función del trigger no se puede invocar directamente.
+- `get_advisors`: sin avisos nuevos (seguridad y rendimiento).
+
+### No probado
+
+- El sitio publicado en Netlify, la actualización del service worker en un navegador real y la app instalada en teléfonos.
+- Notificaciones reales del sistema (dependen del permiso del navegador).
+- No se pudo subir la etiqueta `v1.1` desde este entorno (GitHub rechaza la creación de etiquetas por esta vía); la rama `respaldo-v1.1` apunta al mismo commit.
+
+
 ## Versión con cuentas opcionales (rama `cuentas-usuario`, 14 de noviembre de 2026)
 
 Todas las pruebas usan datos ficticios.

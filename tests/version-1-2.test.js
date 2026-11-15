@@ -318,10 +318,66 @@ test("service worker y Netlify: caché por versión, borra cachés viejos, sin c
   assert.match(sw, /SKIP_WAITING/);
   assert.match(sw, /startsWith\('deudas-pwa-'\)\|\|k\.startsWith\('mpd-cache-'\)/);
   assert.match(sw, /cache:'reload'/);
-  assert.doesNotMatch(sw, /self\.skipWaiting\(\)\)\);/, "no salta solo al instalar: espera al botón");
+  assert.match(sw, /if\(keys\.some\(k=>k\.startsWith\('deudas-pwa-'\)\)\)self\.skipWaiting\(\)/, "solo salta solo al migrar desde versiones sin aviso");
+  assert.match(sw, /c\.match\('\/offline-home'\)\)\.then\(cached=>cached\|\|fetch/, "la página coincide con los archivos de su versión");
   const toml = fs.readFileSync(path.join(__dirname, "..", "netlify.toml"), "utf8");
   assert.match(toml, /publish = "dist"/);
   for (const p of ["/", "/index.html", "/sw.js"]) assert.match(toml, new RegExp('for = "' + p.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&") + '"\\s*\\n\\s*\\[headers\\.values\\]\\s*\\n\\s*Cache-Control = "no-cache, no-store, must-revalidate"'));
   const version = fs.readFileSync(path.join(__dirname, "..", "dist", "app-version.js"), "utf8");
   assert.match(version, /VERSION='1\.2'/);
+});
+
+test("revisión: nombre con HTML no se ejecuta en el formulario de pago", async () => {
+  const evil = '<img src=x onerror="window.__pwned=1">';
+  const h = load({ storage: Object.assign({}, ES, { "nando-deudas-v1": JSON.stringify([debt("u1", evil, { due: "5" })]) }) });
+  await sleep(60);
+  h.doc.querySelector("[data-pay]").click();
+  assert.equal(h.doc.querySelectorAll("#fields img, #dialog img").length, 0);
+  assert.ok(h.doc.querySelector("#fields label").textContent.includes(evil));
+  h.win.MPDDApp.openPayment("u1", { dueDate: dayOf(5) });
+  assert.equal(h.doc.querySelectorAll("img").length, 0);
+  assert.equal(h.win.__pwned, undefined);
+});
+
+test("revisión: un pago rechazado no descuenta el saldo", async () => {
+  const h = load({ storage: Object.assign({}, ES, { "nando-deudas-v1": JSON.stringify([debt("u1", "Tarjeta", { balance: 500, initial: 500 })]) }) });
+  await sleep(60);
+  const { doc, win } = h;
+  doc.querySelector("[data-pay]").click();
+  doc.getElementById("payment").value = "100";
+  doc.getElementById("date").value = "0026-11-15"; // año mal escrito
+  doc.getElementById("form").dispatchEvent(new win.Event("submit", { cancelable: true }));
+  assert.match(doc.getElementById("error").textContent, /fecha del pago/);
+  doc.getElementById("date").value = today();
+  doc.getElementById("form").dispatchEvent(new win.Event("submit", { cancelable: true }));
+  await sleep(20);
+  assert.equal(h.debts()[0].balance, 400, "descuenta una sola vez");
+  assert.equal(h.debts()[0].history.length, 1);
+});
+
+test("revisión: cambiar el día de vencimiento no vuelve rojos los meses pagados; datos 1.1 sin meses vencidos", () => {
+  const d = debt("a", "A", { due: "20", createdAt: "2026-08-01", history: ["08", "09", "10"].map((m) => ({ amount: 5, date: `2026-${m}-09`, dueDate: `2026-${m}-10` })) });
+  const st = S.installments([d], { from: "2026-08-01", to: "2026-10-31", today: "2026-11-15" }).map((i) => i.status);
+  assert.deepEqual(st, ["onTime", "onTime", "onTime"]);
+  const legacy = debt("b", "B", { due: "5", history: [{ amount: 1, date: "2025-01-10" }] });
+  assert.equal(S.badgeCount([legacy], "2026-11-15", 3), 1, "solo la cuota de este mes, no 22 meses");
+});
+
+test("revisión: no se cambia la moneda de una deuda con pagos; CSV protege espacios antes de =", async () => {
+  const h = load({ storage: Object.assign({}, ES, { "nando-deudas-v1": JSON.stringify([debt("u1", "Con pagos", { history: [{ amount: 5, date: dayOf(1) }] })]) }) });
+  await sleep(60);
+  h.doc.querySelector("[data-edit]").click();
+  h.doc.getElementById("currency").value = "COP";
+  h.doc.getElementById("form").dispatchEvent(new h.win.Event("submit", { cancelable: true }));
+  assert.match(h.doc.getElementById("error").textContent, /crea una deuda nueva/);
+  assert.equal(h.debts()[0].currency, "USD");
+  assert.equal(S.csvCell(" =1+1"), "' =1+1");
+  assert.equal(S.csvCell("-5"), "'-5");
+});
+
+test("revisión: el pago propone la cuota más antigua sin pagar", () => {
+  // Pure check of the rule used by the form.
+  const d = debt("a", "A", { due: "5", createdAt: "2026-10-01" });
+  const open = S.installments([d], { from: "2026-09-01", to: "2026-12-31", today: "2026-11-02" }).filter((i) => !i.payment);
+  assert.equal(open[0].dueDate, "2026-10-05");
 });

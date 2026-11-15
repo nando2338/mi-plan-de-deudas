@@ -58,8 +58,9 @@
   /* Primer día desde el que se generan cuotas para una deuda. */
   function startDate(debt, today) {
     if (validDate(debt.createdAt)) return debt.createdAt;
-    const dates = (debt.history || []).map((h) => h && h.date).filter(validDate).sort();
-    return monthStart(dates.length ? dates[0] : today);
+    // Debts from before 1.2 have no creation date: start with the current month so
+    // months the user never recorded do not appear as overdue.
+    return monthStart(today);
   }
   /* Cuotas mensuales entre from y to (inclusive). */
   function installments(debts, { from, to, today }) {
@@ -81,8 +82,12 @@
           month = (n % 12) + 1;
         const dueDate = monthDue(year, month, day);
         if (dueDate < start) continue;
+        const ym = dueDate.slice(0, 7);
+        // 1) exact due date; 2) a due date in the same month (the due day was edited);
+        // 3) a payment without due date made in the same month (data from before 1.2).
         let idx = history.findIndex((h, i) => !used.has(i) && h && h.dueDate === dueDate);
-        if (idx < 0) idx = history.findIndex((h, i) => !used.has(i) && h && !validDate(h.dueDate) && validDate(h.date) && h.date.slice(0, 7) === dueDate.slice(0, 7));
+        if (idx < 0) idx = history.findIndex((h, i) => !used.has(i) && h && validDate(h.dueDate) && h.dueDate.slice(0, 7) === ym);
+        if (idx < 0) idx = history.findIndex((h, i) => !used.has(i) && h && !validDate(h.dueDate) && validDate(h.date) && h.date.slice(0, 7) === ym);
         const payment = idx >= 0 ? history[idx] : null;
         if (idx >= 0) used.add(idx);
         if (dueDate < from || dueDate > to) continue;
@@ -160,7 +165,7 @@
   /* CSV: monto como número limpio (punto decimal) y columna Moneda. */
   function csvCell(v) {
     let s = v === null || v === undefined ? "" : String(v);
-    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; // evita fórmulas al abrir en hojas de cálculo
+    if (/^[\s]*[=+\-@]/.test(s) || /^[\t\r\n]/.test(s)) s = "'" + s; // evita fórmulas al abrir en hojas de cálculo
     return /[",\n\r;]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
   }
   const STATUS_LABEL = { onTime: "Pagado a tiempo", late: "Pagado tarde", paid: "Pagado", pending: "Pendiente", dueToday: "Pendiente", overdue: "Vencido" };
@@ -178,14 +183,17 @@
   const AVISOS_KEY = "mpdd-avisos-v1";
   const AVISOS_OPT = "mpdd-foreground-notices-enabled-v1";
   function readAvisos(store) {
-    const out = { enabled: false, time: "08:00", daysBefore: 3 };
+    const out = { enabled: false, time: "08:00", timeSet: false, daysBefore: 3 };
     try {
       out.enabled = store.getItem(AVISOS_OPT) === "true";
       const raw = store.getItem(AVISOS_KEY);
       if (raw !== null) {
         const v = JSON.parse(raw);
         if (v && typeof v === "object") {
-          if (typeof v.time === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(v.time)) out.time = v.time;
+          if (typeof v.time === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(v.time)) {
+            out.time = v.time;
+            out.timeSet = true;
+          }
           if ([1, 3, 7].includes(v.daysBefore)) out.daysBefore = v.daysBefore;
         }
       }
