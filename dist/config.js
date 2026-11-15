@@ -13,8 +13,8 @@
  * La app se niega a usar una clave secreta si la detecta.
  */
 window.MPDD_CONFIG = Object.freeze({
-  supabaseUrl: "https://TU-PROYECTO.supabase.co",
-  supabaseKey: "TU_CLAVE_PUBLICA",
+  supabaseUrl: "https://gwykdlwuipirusfixioo.supabase.co",
+  supabaseKey: "sb_publishable_PG2TGG-35KWC7qMFkpQ7cw_lfKiclJ_",
   // Cámbialo a true solo cuando hayas activado Google en Supabase → Authentication → Providers.
   googleEnabled: false
 });

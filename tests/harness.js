@@ -8,7 +8,7 @@ const { createFakeLib } = require("./fake-supabase");
 
 const DIST = path.join(__dirname, "..", "dist");
 const read = (f) => fs.readFileSync(path.join(DIST, f), "utf8");
-const PLACEHOLDER_CONFIG = read("config.js");
+const PLACEHOLDER_CONFIG = 'window.MPDD_CONFIG=Object.freeze({supabaseUrl:"https://TU-PROYECTO.supabase.co",supabaseKey:"TU_CLAVE_PUBLICA",googleEnabled:false});';
 const TEST_CONFIG = 'window.MPDD_CONFIG=Object.freeze({supabaseUrl:"https://proyecto-prueba.supabase.co",supabaseKey:"sb_publishable_PRUEBA123",googleEnabled:false});';
 
 const open = new Set();
