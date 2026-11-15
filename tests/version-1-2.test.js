@@ -226,7 +226,8 @@ test("recordatorios en Ajustes y contador rojo en la pestaña de deudas", async 
   assert.deepEqual([...days.options].map((o) => o.value), ["1", "3", "7"]);
   days.value = "7";
   days.dispatchEvent(new win.Event("change"));
-  assert.deepEqual(JSON.parse(win.localStorage.getItem("mpdd-avisos-v1")), { time: "08:00", daysBefore: 7 });
+  assert.deepEqual(JSON.parse(win.localStorage.getItem("mpdd-avisos-v1")), { daysBefore: 7 }, "sin hora elegida no se limita por hora");
+  assert.equal(S.readAvisos(win.localStorage).timeSet, false);
   assert.equal(badge(), expected(7));
   const time = doc.getElementById("avisos-time");
   time.value = "19:45";
@@ -325,6 +326,10 @@ test("service worker y Netlify: caché por versión, borra cachés viejos, sin c
   for (const p of ["/", "/index.html", "/sw.js"]) assert.match(toml, new RegExp('for = "' + p.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&") + '"\\s*\\n\\s*\\[headers\\.values\\]\\s*\\n\\s*Cache-Control = "no-cache, no-store, must-revalidate"'));
   const version = fs.readFileSync(path.join(__dirname, "..", "dist", "app-version.js"), "utf8");
   assert.match(version, /VERSION='1\.2'/);
+  // Each release must change the cache name together with the visible version.
+  const v = version.match(/VERSION='([^']+)'/)[1];
+  assert.equal(sw.match(/const CACHE='([^']+)'/)[1], "mpd-cache-v" + v, "CACHE debe ser mpd-cache-v<versión>");
+  assert.doesNotMatch(sw, /catch\(_\)\{\}\s*\n\/\/ Versions before/, "guardar la página de inicio es obligatorio al instalar");
 });
 
 test("revisión: nombre con HTML no se ejecuta en el formulario de pago", async () => {

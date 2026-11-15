@@ -201,7 +201,7 @@
     return out;
   }
   function validAvisos(v) {
-    return !!v && typeof v === "object" && typeof v.time === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(v.time) && [1, 3, 7].includes(v.daysBefore);
+    return !!v && typeof v === "object" && (v.time === undefined || (typeof v.time === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(v.time))) && [1, 3, 7].includes(v.daysBefore);
   }
   return { AVISOS_KEY, AVISOS_OPT, readAvisos, validAvisos, CATEGORIES, NO_CATEGORY, STATUS_LABEL, validDate, addDays, monthDue, monthEnd, dueDay, minPayment, categoryLabel, paymentStatus, installments, payments, monthSummary, dayColor, badgeCount, toCSV, csvCell };
 });

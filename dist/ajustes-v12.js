@@ -102,7 +102,9 @@
       remStatus.textContent = T.remLocked;
       return false;
     }
-    const v = { time: time.value, daysBefore: Number(days.value) };
+    // The time is saved only once the user chooses one; until then alerts are not limited by time.
+    const v = { daysBefore: Number(days.value) };
+    if (timeChosen) v.time = time.value;
     if (!S.validAvisos(v)) {
       remStatus.textContent = T.remError;
       return false;
@@ -116,7 +118,9 @@
       return false;
     }
   }
+  let timeChosen = cfg.timeSet;
   time.addEventListener("change", () => {
+    timeChosen = true;
     if (saveAvisos()) remStatus.textContent = T.remSaved;
   });
   days.addEventListener("change", () => {

@@ -7,13 +7,14 @@ const LIB='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/s
 const NETWORK_FIRST=['/config.js','/privacidad.html','/terminos.html'];
 // Install: download every file fresh (bypassing the HTTP cache) and keep a fresh copy of the
 // home page for offline use. The new version waits until the user taps "Actualizar".
-self.addEventListener('install',event=>event.waitUntil((async()=>{const keys=await caches.keys();const cache=await caches.open(CACHE);await cache.addAll(ASSETS.map(u=>new Request(u,{cache:'reload'})));try{const r=await fetch(new Request('/',{cache:'reload'}));if(r.ok&&!r.redirected&&(r.headers.get('content-type')||'').includes('text/html'))await cache.put('/offline-home',r)}catch(_){}
+self.addEventListener('install',event=>event.waitUntil((async()=>{const keys=await caches.keys();const cache=await caches.open(CACHE);await cache.addAll(ASSETS.map(u=>new Request(u,{cache:'reload'})));// Required: if the home page cannot be saved, the install fails and the browser retries later.
+const r=await fetch(new Request('/',{cache:'reload'}));if(!r.ok||r.redirected||!(r.headers.get('content-type')||'').includes('text/html'))throw new Error('home page not cached');await cache.put('/offline-home',r);
 // Versions before 1.2 (deudas-pwa-*) have no update banner and would serve old scripts
 // with the new page: replace them right away. From 1.2 on, wait for "Actualizar".
 if(keys.some(k=>k.startsWith('deudas-pwa-')))self.skipWaiting()})()));
 self.addEventListener('message',event=>{if(event.data&&event.data.type==='SKIP_WAITING')self.skipWaiting()});
-// Carry the saved offline home page over from the previous cache before removing old caches.
-self.addEventListener('activate',event=>event.waitUntil((async()=>{const keys=await caches.keys(),cache=await caches.open(CACHE);if(!(await cache.match('/offline-home')))for(const k of keys){if(k===CACHE)continue;const old=await(await caches.open(k)).match('/offline-home');if(old){await cache.put('/offline-home',old);break}}await Promise.all(keys.filter(k=>(k.startsWith('deudas-pwa-')||k.startsWith('mpd-cache-'))&&k!==CACHE).map(k=>caches.delete(k)))})()));
+// Remove the caches of previous versions (this version saved its own home page at install).
+self.addEventListener('activate',event=>event.waitUntil((async()=>{const keys=await caches.keys();await Promise.all(keys.filter(k=>(k.startsWith('deudas-pwa-')||k.startsWith('mpd-cache-'))&&k!==CACHE).map(k=>caches.delete(k)))})()));
 self.addEventListener('fetch',event=>{const req=event.request,url=new URL(req.url);if(req.method!=='GET')return;
 if(url.origin!==location.origin){
 // Supabase (database, auth, functions) and any other origin: never cached, never intercepted.

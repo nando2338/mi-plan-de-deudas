@@ -90,6 +90,8 @@ Novedades (sin anuncios, con el mismo diseño para celular y computador):
 - **Supabase:** migración `supabase/migrations/20261115000000_v1_2_fecha_vencimiento_pagos.sql` (solo agrega: columna `payments.due_on`, un trigger que la llena y un índice; `debts.currency` y `payments.paid_on` ya existían). Respaldo de la estructura anterior en `supabase/respaldo-v1.1.sql`. Los campos nuevos de la app viajan en las columnas `extra` que ya existían, así que la sincronización no cambió.
 - Se quitó el selector pequeño de moneda junto al total (`currency-ghost.js`), porque el inicio ya muestra todas las monedas. Los archivos siguen en el repositorio, pero la app ya no los carga.
 
+**Importante para cada versión futura:** cambia a la vez el número en `dist/app-version.js` y el nombre `CACHE` en `dist/sw.js` (`mpd-cache-v<versión>`). Si no cambias `sw.js`, las personas con la app instalada no reciben la página nueva. Una prueba automática verifica que coincidan.
+
 ### Publicación en Netlify
 
 Netlify publica la carpeta `dist` (también indicado en `netlify.toml`). Para que la 1.2 salga desde `main`: Netlify → el sitio → *Site configuration* → *Build & deploy* → *Continuous deployment* → *Branches and deploy contexts* → *Configure* → *Production branch* = `main` → *Save*. Luego *Deploys* → *Trigger deploy* → *Deploy site*.
