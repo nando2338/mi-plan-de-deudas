@@ -73,6 +73,35 @@ La función está en `supabase/functions/delete-account/index.ts` y **no se ha d
 9. **Publicar.** Sube `dist/` como siempre. Si cambias `config.js` después, no hace falta cambiar la versión del service worker: ese archivo se pide primero a la red.
 10. **Legal.** Completa los marcadores resaltados de `privacidad.html` y `terminos.html` (responsable, identificación, correo, región, retención) y haz que un abogado revise ambos textos antes de abrir las cuentas al público.
 
+## Versión 1.2
+
+Novedades (sin anuncios, con el mismo diseño para celular y computador):
+
+- **Moneda por deuda.** Cada deuda guarda su moneda (USD o COP) y se elige al crearla o editarla. El selector de moneda de *Más → Moneda* solo define la moneda por defecto de las deudas nuevas. Se pueden tener deudas en ambas monedas a la vez y **nunca se suman ni se convierten** montos de monedas distintas.
+- **Un solo formato de montos:** `formatMoney(monto, moneda)` en `dist/money.js` (Intl.NumberFormat `en-US` para USD y `es-CO` para COP): `US$1,250.00 USD` y `$1.250.000 COP`.
+- **Inicio:** "Total que debes" con una línea por moneda (solo las que existan). La lista muestra todas las deudas, agrupadas por moneda; el orden elegido se aplica dentro de cada moneda.
+- **Calendario** (pestaña nueva): cuadrícula del mes con flechas; verde = pagado a tiempo, rojo = vencido sin pagar o pagado tarde, naranja = hoy, blanco = sin pagos (borde punteado = cuota pendiente). Al tocar un día se ven sus pagos y se pueden marcar como pagados. Arriba, "Por pagar este mes" y "Pagado este mes" por moneda.
+- **Estado de cada pago:** cada pago guarda la fecha de vencimiento (opcional) y la fecha real de pago, con la etiqueta "Pagado a tiempo", "Pagado tarde" o "Pendiente". Los pagos antiguos sin fecha de vencimiento aparecen como "Pagado".
+- **Gráfico** (pestaña nueva): dona de lo pagado entre dos fechas (por defecto el mes actual), por deuda o por categoría, una moneda a la vez (botón USD / COP) con el total en el centro, y debajo la lista de pagos con estado, monto y moneda.
+- **Recordatorios en Más:** activar o desactivar, hora del aviso y días de anticipación (1, 3 o 7). Contador rojo en la pestaña Inicio con las cuotas vencidas sin pagar (últimos dos meses) y las que vencen dentro de esos días. Los avisos del dispositivo siguen funcionando solo con la app abierta (no hay notificaciones en segundo plano).
+- **Exportar a CSV** en Más: pagos entre dos fechas, con el monto como número limpio y una columna "Moneda".
+- **Campos nuevos opcionales en cada deuda:** cuota mensual (para calcular "Por pagar este mes") y categoría (para la dona). Se guarda también la fecha de creación de las deudas nuevas, para no marcar como vencidas cuotas anteriores.
+- **Actualización automática:** el service worker usa el caché `mpd-cache-v1.2`, revisa si hay versión nueva cada vez que se abre la app y, si la hay, muestra "Nueva versión disponible – Actualizar". Al tocarlo la app se recarga con la versión nueva. Los cachés viejos se borran. `netlify.toml` evita que el navegador guarde en caché `index.html`, `sw.js` y `config.js`.
+- **Supabase:** migración `supabase/migrations/20261115000000_v1_2_fecha_vencimiento_pagos.sql` (solo agrega: columna `payments.due_on`, un trigger que la llena y un índice; `debts.currency` y `payments.paid_on` ya existían). Respaldo de la estructura anterior en `supabase/respaldo-v1.1.sql`. Los campos nuevos de la app viajan en las columnas `extra` que ya existían, así que la sincronización no cambió.
+- Se quitó el selector pequeño de moneda junto al total (`currency-ghost.js`), porque el inicio ya muestra todas las monedas. Los archivos siguen en el repositorio, pero la app ya no los carga.
+
+### Publicación en Netlify
+
+Netlify publica la carpeta `dist` (también indicado en `netlify.toml`). Para que la 1.2 salga desde `main`: Netlify → el sitio → *Site configuration* → *Build & deploy* → *Continuous deployment* → *Branches and deploy contexts* → *Configure* → *Production branch* = `main` → *Save*. Luego *Deploys* → *Trigger deploy* → *Deploy site*.
+
+### Volver a una versión anterior
+
+- **Respaldo 1.1:** rama `respaldo-v1.1` (y etiqueta `v1.1`, si se creó). Es el código de `main` antes de esta versión, **sin** cuentas.
+- **Versión con cuentas que estaba publicada antes de la 1.2:** rama `cuentas-usuario`.
+- **La más rápida:** Netlify → *Deploys* → elegir el despliegue anterior → *Publish deploy*. No toca GitHub.
+- **Desde GitHub:** en Netlify cambiar *Production branch* a `respaldo-v1.1` (o a `cuentas-usuario`) y desplegar.
+- **Base de datos:** la 1.1 no usa la columna nueva; no hace falta deshacer la migración. Si se quiere, los comandos están al final del archivo de la migración.
+
 ## Pruebas
 
 Requisitos: Node.js 20 o superior.
@@ -80,7 +109,7 @@ Requisitos: Node.js 20 o superior.
 ```bash
 cd tests
 npm install        # instala jsdom (solo para pruebas)
-npm test           # pruebas automatizadas con DOM simulado
+npm test           # 43 pruebas automatizadas con DOM simulado
 npm run check      # node --check en todos los JS + recursos de HTML, service worker y manifiesto
 ```
 

@@ -86,7 +86,7 @@ test("modo sin cuenta: flujos existentes intactos (agregar, pagar, ordenar, pres
   await addDebtViaForm(h, "Crédito", "100");
   await sleep(20);
   assert.equal(h.debts().length, 2);
-  assert.equal(doc.getElementById("total").textContent.replace(/\s/g, ""), "$400.00");
+  assert.equal(doc.getElementById("total").textContent, "US$400.00 USD");
   // Pago
   doc.querySelector("[data-pay]").click();
   doc.getElementById("payment").value = "50";
