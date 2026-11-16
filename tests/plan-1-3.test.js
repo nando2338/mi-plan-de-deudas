@@ -255,8 +255,7 @@ test("tasa personalizada: la tarjeta dice 'Tasa personalizada' y se guarda como 
   const uid = server.addUser("a@ejemplo.test", "x12345678");
   const store = [debt("c1", "Tarjeta", { currency: "COP", balance: 1000000, rate: 20, minPayment: 80000, due: "20" }), debt("u1", "Visa", { balance: 500, rate: 30, minPayment: 25, due: "25" })];
   const h = load({ config: "test", server, storage: Object.assign({}, ES, { "deudas-currency-pref-v1": "USD", "nando-deudas-v1": JSON.stringify(store), "mpdd-cloud-active-v1": "1", "sb-fake-auth-token": session("a@ejemplo.test", uid) }) });
-  await waitFor(() => h.win.MPDDCloud.status().state === "needsChoice");
-  await h.win.MPDDCloud.resolveLink("upload");
+  // 1.4: empty account + local debts -> automatic upload (no question).
   await waitFor(() => h.win.MPDDCloud.status().state === "synced");
   const w = wizardDriver(h);
   w.click("Empezar");
@@ -288,8 +287,7 @@ test("guardar con cuenta: plan en Supabase, pestaña Plan, calendario y recordat
   const uid = server.addUser("a@ejemplo.test", "x12345678");
   const store = [debt("c1", "Tarjeta", { currency: "COP", balance: 2000000, rate: 30, minPayment: 120000, due: "28" })];
   const h = load({ config: "test", server, storage: Object.assign({}, ES, { "deudas-currency-pref-v1": "COP", "nando-deudas-v1": JSON.stringify(store), "mpdd-cloud-active-v1": "1", "sb-fake-auth-token": session("a@ejemplo.test", uid) }) });
-  await waitFor(() => h.win.MPDDCloud.status().state === "needsChoice");
-  await h.win.MPDDCloud.resolveLink("upload");
+  // 1.4: empty account + local debts -> automatic upload (no question).
   await waitFor(() => h.win.MPDDCloud.status().state === "synced");
   const w = wizardDriver(h);
   await waitFor(() => /Arma tu plan en 2 minutos/.test(h.doc.getElementById("plan-root").textContent));
@@ -356,7 +354,10 @@ test("sin cuenta: se puede armar el plan, y al guardarlo se pide iniciar sesión
   assert.ok(!Object.keys(Object.fromEntries(Object.entries(h.win.localStorage))).some((k) => /plan/.test(k)), "no se guarda solo en el dispositivo");
   [...h.doc.querySelectorAll(".pw-status button")].find((b) => b.textContent === "Crear cuenta o iniciar sesión").click();
   assert.equal(h.doc.querySelector(".plan-wizard"), null);
-  assert.equal(h.doc.getElementById("view-more").hidden, false, "lleva a Más → Cuenta");
+  // 1.4: routed through MPDDAccount.ask("plan") -> sign-in / create-account dialog.
+  const auth = h.doc.getElementById("account-auth-dialog");
+  assert.ok(auth.hasAttribute("open"), "abre el diálogo de cuenta");
+  assert.match(auth.textContent, /Crea tu cuenta para guardar tu plan/);
 });
 
 test("faltan tasa o mínimo: se piden en la fila y se guardan en la deuda", async () => {
@@ -475,11 +476,11 @@ test("revisión: la barra llega al dinero libre exacto y el plan sin guardar se 
   w.click("Siguiente");
   w.click("Empezar mi plan");
   [...h.doc.querySelectorAll(".pw-status button")].find((b) => b.textContent === "Crear cuenta o iniciar sesión").click();
+  [...h.doc.querySelectorAll("#account-auth-dialog button")].find((b) => b.textContent === "Iniciar sesión").click();
   h.doc.getElementById("acc-login-email").value = "a@ejemplo.test";
   h.doc.getElementById("acc-login-password").value = "x12345678";
-  h.doc.querySelector("#account-root form").dispatchEvent(new h.win.Event("submit", { cancelable: true }));
-  await waitFor(() => h.win.MPDDCloud.status().state === "needsChoice");
-  await h.win.MPDDCloud.resolveLink("upload");
+  h.doc.querySelector("#account-auth-dialog form").dispatchEvent(new h.win.Event("submit", { cancelable: true }));
+  await waitFor(() => h.win.MPDDCloud.status().state === "synced", { label: "subida automática" });
   await waitFor(() => /Continuar con tu plan/.test(h.doc.getElementById("plan-root").textContent), { label: "ofrece continuar" });
   w.click("Continuar con tu plan");
   assert.equal(w.step(), "Paso 5 de 5");
