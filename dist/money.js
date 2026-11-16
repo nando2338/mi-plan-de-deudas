@@ -42,5 +42,11 @@
   function ordered(totals) {
     return CURRENCIES.filter((c) => Object.prototype.hasOwnProperty.call(totals, c));
   }
-  return { CURRENCIES, formatMoney, totalsByCurrency, ordered };
+  /* Tasa de cambio (pesos por dólar) con sus 2 decimales oficiales: $3.912,45 COP. */
+  const rate = new Intl.NumberFormat("es-CO", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  function formatRate(n) {
+    const v = Number(n);
+    return "$" + rate.format(Number.isFinite(v) ? v : 0) + " COP";
+  }
+  return { CURRENCIES, formatMoney, formatRate, totalsByCurrency, ordered };
 });

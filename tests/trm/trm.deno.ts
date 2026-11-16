@@ -4,9 +4,9 @@ import { db } from "./fake-sb.ts";
 let handler: any;
 (Deno as any).serve = (h: any) => { handler = h; };
 Deno.env.set("SUPABASE_URL", "https://x.supabase.co"); Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", "test-only");
-let mode = "ok"; let seenUrl = "";
+let mode = "ok"; let seenUrl = ""; let fetches = 0;
 globalThis.fetch = (async (u: string) => {
-  seenUrl = String(u);
+  seenUrl = String(u); fetches++;
   if (mode === "down") throw new Error("network");
   if (mode === "500") return new Response("x", { status: 500 });
   return new Response(JSON.stringify([{ valor: "3912.45", unidad: "COP", vigenciadesde: "2026-11-14T00:00:00.000", vigenciahasta: "2026-11-17T00:00:00.000" }]), { status: 200 });
@@ -23,4 +23,6 @@ db.rows = [{ fecha: "2026-11-10", valor: 3900, fuente: "Superintendencia Financi
 [st, body] = await call(); assert(st === 200 && body.desactualizada === true && body.fecha === "2026-11-10", "API caída: última guardada desactualizada"); console.log("3 desactualizada:", JSON.stringify(body));
 db.rows = []; mode = "500"; [st, body] = await call(); assert(st === 503, "sin TRM: 503"); console.log("4 sin datos:", st);
 console.log("5 OPTIONS:", (await handler(new Request("https://f/trm", { method: "OPTIONS" }))).status, "DELETE:", (await handler(new Request("https://f/trm", { method: "DELETE" }))).status);
+const before = fetches; await call(); await call();
+assert(fetches === before, "tras una falla espera 5 minutos antes de volver a consultar la API");
 console.log("OK: todas las pruebas de la función trm pasaron");

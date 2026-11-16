@@ -152,7 +152,9 @@
     const expensesTotal = (input.expenses || []).reduce((s, x) => s + Math.max(0, Number(x && x.amount) || 0), 0);
     const incomePlan = round(toPlan(income, incomeCurrency), planCurrency);
     const expensesPlan = round(toPlan(expensesTotal, incomeCurrency), planCurrency);
-    const planDebts = debts.map((d) => ({ id: String(d.id), balance: toPlan(d.balance, d.currency), rate: Number(d.rate), min: toPlan(Number(d.minPayment), d.currency) }));
+    // A minimum larger than what is owed only needs the balance plus this month's interest.
+    const owedNow = (d) => Number(d.balance) * (1 + Math.max(0, Number(d.rate)) / 1200);
+    const planDebts = debts.map((d) => ({ id: String(d.id), balance: toPlan(d.balance, d.currency), rate: Number(d.rate), min: toPlan(Math.min(Number(d.minPayment), owedNow(d)), d.currency) }));
     const minimumsPlan = round(planDebts.reduce((s, d) => s + d.min, 0), planCurrency);
     const free = round(incomePlan - expensesPlan - minimumsPlan, planCurrency);
     const maxExtra = Math.max(0, free);
@@ -166,8 +168,13 @@
       const id = String(d.id);
       const payPlan = withExtra.firstMonth.get(id) || 0;
       const minPlan = planDebts.find((x) => x.id === id).min;
-      const payment = round(convert(payPlan, planCurrency, d.currency, fx), d.currency);
+      // Converting back and forth can lose cents: never show less than the real minimum.
+      const realMin = round(Math.min(Number(d.minPayment), owedNow(d)), d.currency);
+      const payment = Math.max(round(convert(payPlan, planCurrency, d.currency, fx), d.currency), payPlan > 0 ? realMin : 0);
       const day = dueDay(d);
+      // If this month's due day already passed, the next payment date is next month's.
+      let due = day ? dueDateIn(ym, day) : null;
+      if (due && due < String(input.today)) due = dueDateIn(monthAdd(ym, 1), day);
       return {
         debtId: id,
         name: String(d.name || ""),
@@ -178,7 +185,7 @@
         payment,
         approx: d.currency !== planCurrency ? round(payPlan, planCurrency) : null,
         first: payPlan > minPlan + (planCurrency === "COP" ? 1 : 0.01),
-        dueDate: day ? dueDateIn(ym, day) : null,
+        dueDate: due,
       };
     });
     // Priority order for display: first the ones receiving extra (in simulation order), then the rest by due date.
@@ -191,6 +198,7 @@
     for (const it of items) totals[it.currency] = round((totals[it.currency] || 0) + it.payment, it.currency);
     const totalApprox = fxUsed ? round(items.reduce((s, it) => s + (withExtra.firstMonth.get(it.debtId) || 0), 0), planCurrency) : null;
     return {
+      hasDebts: debts.length > 0,
       planCurrency,
       incomeCurrency,
       fxUsed,

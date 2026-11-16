@@ -35,6 +35,10 @@ function parseValor(v: unknown): number | null {
   const n = typeof v === "number" ? v : Number(String(v ?? "").replace(/[^0-9.]/g, ""));
   return Number.isFinite(n) && n >= 100 && n <= 100000 ? Math.round(n * 100) / 100 : null;
 }
+// After a failed lookup, wait 5 minutes before asking datos.gov.co again (per instance),
+// so repeated public calls cannot hammer the open-data API.
+let lastFailure = 0;
+const RETRY_MS = 5 * 60 * 1000;
 const day = (s: unknown) => (typeof s === "string" && /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0, 10) : null);
 
 async function fromApi(today: string) {
@@ -64,11 +68,13 @@ Deno.serve(async (req) => {
 
   // b) Ask the open-data API and store it.
   try {
+    if (Date.now() - lastFailure < RETRY_MS) throw new Error("reintento_en_espera");
     const r = await fromApi(today);
     const row = { fecha: today, valor: r.valor, fuente: SOURCE, vigencia_desde: r.vigencia_desde, vigencia_hasta: r.vigencia_hasta };
     await admin.from("exchange_rates").upsert(row, { onConflict: "fecha", ignoreDuplicates: true });
     return json({ ...out(row), desactualizada: false }, 200, 600);
-  } catch (_) {
+  } catch (e) {
+    if (!(e instanceof Error && e.message === "reintento_en_espera")) lastFailure = Date.now();
     // c) API failed: last stored TRM, flagged as outdated.
     const { data: last } = await admin.from("exchange_rates").select("fecha, valor, fuente, vigencia_desde, vigencia_hasta").order("fecha", { ascending: false }).limit(1).maybeSingle();
     if (last) return json({ ...out(last), desactualizada: true }, 200, 60);

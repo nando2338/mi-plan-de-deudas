@@ -104,6 +104,13 @@
     saveError: "No se pudo guardar tu plan. Revisa tu conexión e inténtalo de nuevo.",
     remindersOff: "Activa los avisos en Más → Recordatorios para que te recordemos cada pago.",
     planPaid: "Pagado",
+    resume: "Continuar con tu plan",
+    resumeText: "Tienes un plan sin guardar. Ya puedes guardarlo con tu cuenta.",
+    discard: "Descartar",
+    fxNeedsUpdate: "Agregaste una deuda en otra moneda. Ajusta tu plan para elegir la tasa de cambio.",
+    noDebtsPlan: "Agrega al menos una deuda para armar tu plan.",
+    baseNever: "Solo con los mínimos no terminarías de pagar.",
+    all: "Todo",
   };
   window.MPDDStrings = Object.assign(window.MPDDStrings || {}, { plan: T });
   const EXPENSES = [
@@ -261,6 +268,12 @@
       root.append(el("p", "label", T.loading));
       return;
     }
+    const pd = pendingDraft();
+    if (pd && signedIn()) {
+      const box = el("div", "notice plan-resume");
+      box.append(el("p", "", T.resumeText), btn(T.resume, "save", () => openWizard(null, pd)), " ", btn(T.discard, "ghost", () => (dropDraft(), renderTab())));
+      root.append(box);
+    }
     if (!saved) {
       const card = el("div", "plan-empty");
       card.append(el("h3", "", T.emptyTitle), el("p", "", T.emptyText), btn(T.start, "save plan-start", () => openWizard(null)));
@@ -275,7 +288,7 @@
     try {
       result = compute(d);
     } catch (e) {
-      root.append(el("p", "notice", T.needsUpdate), btn(T.adjust, "save", () => openWizard(saved)));
+      root.append(el("p", "notice", e && e.missing ? T.needsUpdate : T.fxNeedsUpdate), btn(T.adjust, "save", () => openWizard(saved)));
       return;
     }
     // TRM changed more than 3% since the plan was made (official rate only).
@@ -326,7 +339,7 @@
     if (r.fxUsed) {
       const approx = items.reduce((s, it) => s + (it.currency === r.planCurrency ? it.payment : Core.convert(it.payment, it.currency, r.planCurrency, r.fx)), 0);
       const line = el("div", "plan-approx");
-      line.append(raw("span", "≈ " + fmt(approx, r.planCurrency)), " ", el("span", "", "(" + T.approx + ")"));
+      line.append(raw("span", "≈ " + fmt(approx, r.planCurrency)), " ", raw("span", "("), el("span", "", T.approx), raw("span", ")"));
       tot.append(line);
     }
     box.append(tot);
@@ -355,10 +368,10 @@
       return box;
     }
     const line = el("div", "trm-line");
-    if (info.saved && info.type === "oficial") line.append(el("strong", "", T.trmUsed), " ", raw("span", "1 USD = " + fmt(info.rate, "COP")), " · ", el("span", "", T.trmSource), " · ", raw("span", info.fecha ? longDate(info.fecha) : "—"));
-    else if (info.type === "personalizada") line.append(el("strong", "", T.trmCustom), " ", raw("span", "1 USD = " + fmt(info.rate, "COP")));
-    else if (info.desactualizada) line.append(el("strong", "", T.trmLast), " ", raw("span", info.fecha ? longDate(info.fecha) : "—"), " · ", raw("span", "1 USD = " + fmt(info.rate, "COP")));
-    else line.append(el("strong", "", T.trmToday), " ", raw("span", "1 USD = " + fmt(info.rate, "COP")), " · ", el("span", "", T.trmSource), " · ", raw("span", info.fecha ? longDate(info.fecha) : "—"));
+    if (info.saved && info.type === "oficial") line.append(el("strong", "", T.trmUsed), " ", raw("span", "1 USD = " + MPDDMoney.formatRate(info.rate)), " · ", el("span", "", T.trmSource), " · ", raw("span", info.fecha ? longDate(info.fecha) : "—"));
+    else if (info.type === "personalizada") line.append(el("strong", "", T.trmCustom), " ", raw("span", "1 USD = " + MPDDMoney.formatRate(info.rate)));
+    else if (info.desactualizada) line.append(el("strong", "", T.trmLast), " ", raw("span", info.fecha ? longDate(info.fecha) : "—"), " · ", raw("span", "1 USD = " + MPDDMoney.formatRate(info.rate)));
+    else line.append(el("strong", "", T.trmToday), " ", raw("span", "1 USD = " + MPDDMoney.formatRate(info.rate)), " · ", el("span", "", T.trmSource), " · ", raw("span", info.fecha ? longDate(info.fecha) : "—"));
     box.append(line);
     if (!readOnly) box.append(trmControls(d));
     box.append(el("p", "label small", T.trmNote));
@@ -405,8 +418,8 @@
   }
 
   /* ---------------- wizard ---------------- */
-  function openWizard(fromSaved) {
-    draft = fromSaved ? draftFromSaved(fromSaved) : freshDraft();
+  function openWizard(fromSaved, fromDraft) {
+    draft = fromDraft ? Object.assign(freshDraft(), fromDraft, { step: 5 }) : fromSaved ? draftFromSaved(fromSaved) : freshDraft();
     trmEditing = false;
     message = null;
     wizard = el("div", "plan-wizard");
@@ -418,7 +431,7 @@
     wizard.addEventListener("keydown", (e) => {
       if (e.key === "Escape") closeWizard();
     });
-    if (appDebts().some((x) => Number(x.balance) > 0 && x.currency !== draft.incomeCurrency)) ensureTRM().then(() => wizard && renderStep());
+    if (fxNeeded(draft) || appDebts().some((x) => Number(x.balance) > 0 && x.currency !== draft.incomeCurrency)) ensureTRM().then(() => wizard && renderStep());
     renderStep();
   }
   function closeWizard() {
@@ -439,7 +452,8 @@
     const d = draft;
     wizard.replaceChildren();
     const top = el("div", "pw-top");
-    const back = btn("‹ " + T.back, "ghost pw-back", () => (d.step > 1 ? go(d.step - 1) : closeWizard()));
+    const back = btn("", "ghost pw-back", () => (d.step > 1 ? go(d.step - 1) : closeWizard()));
+    back.append(raw("span", "‹ "), el("span", "", T.back));
     const prog = el("div", "pw-progress");
     const label = el("div", "pw-step");
     label.append(el("span", "", T.step), " ", raw("span", String(d.step)), " ", el("span", "", T.of), " ", raw("span", "5"));
@@ -598,6 +612,7 @@
     body.append(el("p", "label", T.s3Note));
     const planCur = planCurrencyOf(d);
     const fxNeed = fxNeeded(d);
+    if (fxNeed && !fxRate(d) && trmState !== "loading" && trmState !== "failed") ensureTRM().then(() => wizard && draft && draft.step === 3 && renderStep());
     const fx = fxNeed ? fxRate(d) : null;
     const rows = el("div", "pw-debts");
     let totalMin = 0,
@@ -616,7 +631,8 @@
       } else rate.append(el("span", "", T.rate), " ", raw("span", Number(x.rate) + "%"));
       const min = el("div", "pw-debt-line");
       if (missing.includes("minPayment")) {
-        const [f, input] = amountInput("plan-min-" + x.id, T.minInput + " (" + x.currency + ")", v.minPayment ?? "", x.currency);
+        const [f, input] = amountInput("plan-min-" + x.id, T.minInput, v.minPayment ?? "", x.currency);
+        f.querySelector("label").append(" ", raw("span", "(" + x.currency + ")"));
         input.addEventListener("input", () => (d.edits[x.id] = Object.assign({}, d.edits[x.id], { minPayment: input.value })));
         min.append(f);
       } else {
@@ -712,32 +728,42 @@
     slider.id = "plan-extra";
     slider.min = "0";
     slider.max = String(r.free);
-    slider.step = cur === "COP" ? (r.free >= 10000 ? "1000" : "1") : r.free >= 100 ? "1" : "0.01";
+    const unit = cur === "COP" ? (r.free >= 10000 ? 1000 : 1) : r.free >= 100 ? 1 : 0.01;
+    // Arrow keys move one rounding unit; "Todo" reaches the exact free amount.
+    slider.step = String(unit);
+    const snap = (v) => (v >= r.free - unit / 2 ? r.free : Core.round(Math.round(v / unit) * unit, cur));
     d.extra = Math.min(d.extra, r.free);
     slider.value = String(d.extra);
     const sl = el("label", "", T.s4Extra);
     sl.htmlFor = slider.id;
     const val = raw("strong", fmt(d.extra, cur), "pw-extra-value");
-    sliderWrap.append(sl, slider, val);
+    const allBtn = btn(T.all, "ghost pw-all", () => {
+      slider.value = String(r.free);
+      update(r.free);
+    });
+    sliderWrap.append(sl, slider, val, allBtn);
     body.append(sliderWrap);
     const results = el("div", "pw-results");
     results.setAttribute("aria-live", "polite");
     body.append(results);
-    const update = () => {
-      d.extra = Number(slider.value);
+    const update = (exact) => {
+      d.extra = typeof exact === "number" ? exact : snap(Number(slider.value));
       const x = compute(d, { extra: d.extra });
       val.textContent = fmt(d.extra, cur);
       slider.setAttribute("aria-valuetext", fmt(d.extra, cur));
       results.replaceChildren();
-      if (x.status !== "paid") {
+      if (!x.hasDebts) {
+        results.append(el("p", "label", T.noDebtsPlan));
+      } else if (x.status !== "paid") {
         results.append(el("p", "error", T.s4Never));
       } else {
         const p1 = el("p", "pw-payoff");
         p1.append(el("span", "", T.s4Payoff), " ", raw("strong", monthName(x.payoffYm)));
         const p2 = el("p", "label");
-        p2.append(el("span", "", T.s4PayoffBase), " ", raw("span", x.statusWithoutExtra === "paid" ? monthName(x.payoffYmWithoutExtra) : "—"));
+        if (x.statusWithoutExtra === "paid") p2.append(el("span", "", T.s4PayoffBase), " ", raw("span", monthName(x.payoffYmWithoutExtra)));
+        else p2.append(el("span", "", T.baseNever));
         const p3 = el("p");
-        p3.append(el("span", "", T.s4Saved), " ", raw("strong", x.interestSaved === null ? "—" : fmt(x.interestSaved, cur)));
+        if (x.interestSaved !== null) p3.append(el("span", "", T.s4Saved), " ", raw("strong", fmt(x.interestSaved, cur)));
         results.append(p1, p2, p3);
       }
       const p4 = el("p");
@@ -745,7 +771,7 @@
       results.append(p4);
     };
     slider.addEventListener("input", update);
-    update();
+    update(d.extra);
     nextButton(foot, T.next, () => go(5));
   }
   function step5(body, foot, d) {
@@ -768,7 +794,12 @@
       }),
     );
     const startBtn = nextButton(foot, T.startPlan, async () => {
+      if (!r.hasDebts) {
+        status.textContent = T.noDebtsPlan;
+        return;
+      }
       if (!signedIn()) {
+        keepDraft(d);
         status.replaceChildren(el("span", "", T.needAccount), " ", btn(T.goAccount, "save", () => {
           closeWizard();
           if (window.MPDDNavigate) window.MPDDNavigate("more");
@@ -783,6 +814,27 @@
       startBtn.disabled = false;
       if (!ok) status.textContent = T.saveError;
     });
+  }
+
+  /* Draft kept only for this browser tab session (sessionStorage) while the user signs in;
+     it is removed as soon as the plan is saved or discarded. The saved plan lives in Supabase. */
+  const DRAFT_KEY = "mpdd-plan-draft-v1";
+  function keepDraft(d) {
+    try {
+      sessionStorage.setItem(DRAFT_KEY, JSON.stringify(Object.assign({}, d, { step: 5 })));
+    } catch (_) {}
+  }
+  function pendingDraft() {
+    try {
+      const v = JSON.parse(sessionStorage.getItem(DRAFT_KEY) || "null");
+      if (v && typeof v === "object" && Array.isArray(v.expenses) && ["USD", "COP"].includes(v.incomeCurrency)) return v;
+    } catch (_) {}
+    return null;
+  }
+  function dropDraft() {
+    try {
+      sessionStorage.removeItem(DRAFT_KEY);
+    } catch (_) {}
   }
 
   /* ---------------- saving ---------------- */
@@ -812,6 +864,7 @@
       return false;
     }
     saved = res.plan;
+    dropDraft();
     addReminders(r);
     message = T.saved;
     try {
@@ -847,7 +900,7 @@
       if (!saved || !Array.isArray(saved.items)) return {};
       const ym = String(saved.plan_month || "").slice(0, 7);
       const out = {};
-      for (const it of saved.items) if (it && it.debtId && Number(it.payment) > 0) out[it.debtId + "|" + ym] = Number(it.payment);
+      for (const it of saved.items) if (it && it.debtId && Number(it.payment) > 0) out[it.debtId + "|" + (typeof it.dueDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(it.dueDate) ? it.dueDate.slice(0, 7) : ym)] = Number(it.payment);
       return out;
     },
     current: () => saved,

@@ -172,7 +172,7 @@ test("deudas en USD y COP: plan en COP y plan en USD, cada pago en su moneda con
   w.set("#plan-exp-0", "2000000");
   w.click("Siguiente");
   await waitFor(() => /TRM de hoy/.test(w.body()));
-  assert.match(w.body(), /TRM de hoy: 1 USD = \$4\.000 COP · Superintendencia Financiera · 15 de noviembre de 2026/);
+  assert.match(w.body(), /TRM de hoy: 1 USD = \$4\.000,00 COP · Superintendencia Financiera · 15 de noviembre de 2026/);
   assert.match(w.body(), /≈ \$160\.000 COP/, "equivalente en letra pequeña");
   assert.match(w.body(), /Total de mínimos: \$310\.000 COP aproximado/);
   assert.match(w.body(), /aproximados\. Tu banco puede cobrar una tasa distinta/);
@@ -234,7 +234,7 @@ test("falla de la API de la TRM: usa la última guardada (desactualizada)", asyn
   w.click("Siguiente");
   w.click("Siguiente");
   await waitFor(() => /Última TRM disponible/.test(w.body()), { label: "TRM desactualizada" });
-  assert.match(w.body(), /Última TRM disponible: 13 de noviembre de 2026 · 1 USD = \$3\.950 COP/);
+  assert.match(w.body(), /Última TRM disponible: 13 de noviembre de 2026 · 1 USD = \$3\.950,00 COP/);
   // Function unreachable: the app falls back to the last TRM it received, also flagged as outdated.
   const h2 = load({ config: "test", server, storage: Object.assign({}, ES, { "nando-deudas-v1": JSON.stringify(store), "mpdd-trm-cache-v1": JSON.stringify({ valor: 3900, fecha: "2026-11-12", fuente: "Superintendencia Financiera de Colombia" }) }) });
   server.trm = { status: 0 };
@@ -245,7 +245,7 @@ test("falla de la API de la TRM: usa la última guardada (desactualizada)", asyn
   w2.click("Siguiente");
   w2.click("Siguiente");
   await waitFor(() => /Última TRM disponible/.test(w2.body()));
-  assert.match(w2.body(), /12 de noviembre de 2026 · 1 USD = \$3\.900 COP/);
+  assert.match(w2.body(), /12 de noviembre de 2026 · 1 USD = \$3\.900,00 COP/);
   // The edge function itself is tested with Deno in tests/trm (API down → last stored).
   assert.ok(fs.existsSync(path.join(__dirname, "trm", "trm.deno.ts")));
 });
@@ -267,7 +267,7 @@ test("tasa personalizada: la tarjeta dice 'Tasa personalizada' y se guarda como 
   w.click("Usar otra tasa");
   w.set("#plan-fx", "4200");
   w.click("Usar esta tasa");
-  assert.match(w.body(), /Tasa personalizada: 1 USD = \$4\.200 COP/);
+  assert.match(w.body(), /Tasa personalizada: 1 USD = \$4\.200,00 COP/);
   w.click("Siguiente");
   w.click("Siguiente");
   w.click("Empezar mi plan");
@@ -402,7 +402,7 @@ test("la TRM cambió más de 3 %: aviso en la pestaña Plan y actualización", a
   // The device was already linked (no first-login question).
   const h = load({ config: "test", server, storage: Object.assign({}, ES, { "nando-deudas-v1": JSON.stringify(store), "mpdd-cloud-state-v1": JSON.stringify({ userId: uid, debts: {}, settings: {} }), "mpdd-cloud-active-v1": "1", "sb-fake-auth-token": session("a@ejemplo.test", uid) }) });
   await waitFor(() => /La TRM cambió/.test(h.doc.getElementById("plan-root").textContent), { label: "aviso TRM" });
-  assert.match(h.doc.getElementById("plan-root").textContent, /TRM usada en tu plan: 1 USD = \$3\.800 COP/);
+  assert.match(h.doc.getElementById("plan-root").textContent, /TRM usada en tu plan: 1 USD = \$3\.800,00 COP/);
   [...h.doc.querySelectorAll("#plan-root button")].find((b) => b.textContent === "Actualizar").click();
   await waitFor(() => server.plans.get(uid).fx_rate === 4000, { label: "plan actualizado" });
   await waitFor(() => !/La TRM cambió/.test(h.doc.getElementById("plan-root").textContent));
@@ -433,4 +433,58 @@ test("textos del plan traducidos al inglés y versión 1.3", async () => {
   const sw = fs.readFileSync(path.join(__dirname, "..", "dist", "sw.js"), "utf8");
   assert.match(sw, /mpd-cache-v1\.3/);
   for (const f of ["/plan-core.js", "/plan-ui.js", "/plan.css"]) assert.ok(sw.includes("'" + f + "'"), f);
+});
+
+test("revisión: el calendario no muestra 'Monto por definir' junto a un monto", async () => {
+  const t = new Date().toLocaleDateString("en-CA");
+  const h = load({ storage: Object.assign({}, ES, { "nando-deudas-v1": JSON.stringify([debt("c1", "Tarjeta", { currency: "COP", minPayment: 150000, due: String(+t.slice(8, 10)), createdAt: t.slice(0, 8) + "01" })]) }) });
+  await sleep(60);
+  h.doc.querySelector(`.cal-day[data-date="${t}"]`).click();
+  const txt = h.doc.querySelector(".cal-detail").textContent;
+  assert.match(txt, /\$150\.000 COP/);
+  assert.doesNotMatch(txt, /Monto por definir/);
+});
+
+test("revisión: con plan en otra moneda el pago nunca queda por debajo del mínimo; fechas pasadas van al mes siguiente", () => {
+  const r = P.buildPlan(base({ income: 2000, incomeCurrency: "USD", planCurrency: "USD", fx: 3917.37, today: "2026-11-15", debts: [{ id: "c", name: "C", currency: "COP", balance: 3000000, rate: 28, minPayment: 150000, due: "10" }, { id: "u", name: "U", currency: "USD", balance: 900, rate: 20, minPayment: 30, due: "20" }] }));
+  const c = r.items.find((i) => i.debtId === "c");
+  assert.ok(c.payment >= 150000, "pago " + c.payment);
+  assert.equal(c.dueDate, "2026-12-10", "el 10 ya pasó: siguiente fecha");
+  assert.equal(r.items.find((i) => i.debtId === "u").dueDate, "2026-11-20");
+  // Minimum larger than what is owed only counts the balance (+ interest).
+  const small = P.buildPlan(base({ income: 1000, extra: 0, debts: [{ id: "s", name: "S", currency: "USD", balance: 20, rate: 0, minPayment: 100 }, { id: "b", name: "B", currency: "USD", balance: 500, rate: 10, minPayment: 50 }] }));
+  assert.equal(small.minimums, 70);
+  assert.equal(small.items.some((i) => i.first), false, "sin extra no hay PAGA PRIMERO");
+  // No debts: nothing to save.
+  assert.equal(P.buildPlan(base({ income: 1000 })).hasDebts, false);
+});
+
+test("revisión: la barra llega al dinero libre exacto y el plan sin guardar se recupera tras iniciar sesión", async () => {
+  const server = new FakeServer();
+  const uid = server.addUser("a@ejemplo.test", "x12345678");
+  const h = load({ config: "test", server, storage: Object.assign({}, ES, { "deudas-currency-pref-v1": "COP", "nando-deudas-v1": JSON.stringify([debt("c1", "Tarjeta", { currency: "COP", balance: 5000000, rate: 25, minPayment: 63500, due: "28" })]) }) });
+  await sleep(60);
+  const w = wizardDriver(h);
+  w.click("Empezar");
+  w.set("#plan-income", "1500000");
+  w.click("Siguiente");
+  w.click("Siguiente");
+  w.click("Siguiente");
+  w.click("Todo");
+  assert.match(w.body(), /Te queda al mes para imprevistos: \$0 COP/);
+  w.click("Siguiente");
+  w.click("Empezar mi plan");
+  [...h.doc.querySelectorAll(".pw-status button")].find((b) => b.textContent === "Crear cuenta o iniciar sesión").click();
+  h.doc.getElementById("acc-login-email").value = "a@ejemplo.test";
+  h.doc.getElementById("acc-login-password").value = "x12345678";
+  h.doc.querySelector("#account-root form").dispatchEvent(new h.win.Event("submit", { cancelable: true }));
+  await waitFor(() => h.win.MPDDCloud.status().state === "needsChoice");
+  await h.win.MPDDCloud.resolveLink("upload");
+  await waitFor(() => /Continuar con tu plan/.test(h.doc.getElementById("plan-root").textContent), { label: "ofrece continuar" });
+  w.click("Continuar con tu plan");
+  assert.equal(w.step(), "Paso 5 de 5");
+  w.click("Empezar mi plan");
+  await waitFor(() => server.plans.get(uid));
+  assert.equal(server.plans.get(uid).extra, 1436500);
+  assert.equal(h.win.sessionStorage.getItem("mpdd-plan-draft-v1"), null, "el borrador temporal se borra al guardar");
 });

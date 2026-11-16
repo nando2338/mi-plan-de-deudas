@@ -185,9 +185,10 @@
       const body = el("div", "pay-body");
       body.append(raw("strong", it.name));
       const amt = it.payment ? formatMoney(it.payment.amount, it.currency) : it.expected !== null ? formatMoney(it.expected, it.currency) : null;
-      if (amt) body.append(raw("span", amt, "pay-amount"));
-      if (!it.payment && it.planned) body.append(el("span", "plan-chip", T.inPlan));
-      else body.append(el("span", "pay-amount muted", T.noAmount));
+      if (amt) {
+        body.append(raw("span", amt, "pay-amount"));
+        if (!it.payment && it.planned) body.append(el("span", "plan-chip", T.inPlan));
+      } else body.append(el("span", "pay-amount muted", T.noAmount));
       const meta = el("span", "label");
       meta.append(el("span", "", T.due), " ", raw("span", it.dueDate));
       if (it.payment) meta.append(" · ", el("span", "", T.paidOn), " ", raw("span", it.payment.date));

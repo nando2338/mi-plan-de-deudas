@@ -2,7 +2,7 @@
 
 ## Versión 1.3 (rama `version-1.3`, 16 de noviembre de 2026)
 
-Ejecutar: `cd tests && npm test` (63 pruebas) y `npm run check`. Función `trm`: `cd tests/trm && deno run --allow-env --import-map=map.json trm.deno.ts`.
+Ejecutar: `cd tests && npm test` (66 pruebas) y `npm run check`. Función `trm`: `cd tests/trm && deno run --allow-env --import-map=map.json trm.deno.ts`.
 
 `tests/plan-1-3.test.js` (15 pruebas). **Aprobado:**
 - Fecha libre de deudas e intereses ahorrados, contra un cálculo de referencia independiente; traspaso del pago cuando una deuda se termina.

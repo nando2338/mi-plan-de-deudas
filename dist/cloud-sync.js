@@ -819,9 +819,11 @@
     } catch (_) {}
     try {
       // The plan lives in its own table (1.3): remove it first (own row via RLS).
+      const c = await getClient();
+      const del = await c.from("debt_plans").delete().eq("user_id", status.userId);
+      if (del && del.error) throw codeError(navigator.onLine === false ? "network" : "server");
       try {
-        const c = await getClient();
-        await c.from("debt_plans").delete().eq("user_id", status.userId);
+        ls.removeItem(PLAN_CACHE);
       } catch (_) {}
       await rpc("mpdd_delete_my_data");
     } catch (e) {
