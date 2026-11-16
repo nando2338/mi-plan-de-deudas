@@ -351,7 +351,10 @@ test("sin cuenta: se puede armar el plan, y al guardarlo se pide iniciar sesión
   assert.match(h.doc.querySelector(".pw-status").textContent, /necesitas una cuenta/);
   assert.equal(server.plans.size, 0);
   assert.equal(h.net.createClient, 0, "sin sesión no se carga Supabase");
-  assert.ok(!Object.keys(Object.fromEntries(Object.entries(h.win.localStorage))).some((k) => /plan/.test(k)), "no se guarda solo en el dispositivo");
+  // 1.4: only the temporary draft (with its timestamp, expires in 24 h) stays on the device so a
+  // sign-in link opened in another tab can continue it; the plan itself is not saved locally.
+  assert.deepEqual(Object.keys(Object.fromEntries(Object.entries(h.win.localStorage))).filter((k) => /plan/.test(k)), ["mpdd-plan-draft-v1"], "no se guarda solo en el dispositivo");
+  assert.equal(typeof JSON.parse(h.win.localStorage.getItem("mpdd-plan-draft-v1")).savedAt, "number");
   [...h.doc.querySelectorAll(".pw-status button")].find((b) => b.textContent === "Crear cuenta o iniciar sesión").click();
   assert.equal(h.doc.querySelector(".plan-wizard"), null);
   // 1.4: routed through MPDDAccount.ask("plan") -> sign-in / create-account dialog.
@@ -409,12 +412,13 @@ test("la TRM cambió más de 3 %: aviso en la pestaña Plan y actualización", a
   await waitFor(() => !/La TRM cambió/.test(h.doc.getElementById("plan-root").textContent));
 });
 
-test("la pantalla de Capacidad mensual ya no existe; Métodos conserva el comparador", async () => {
+test("la pantalla de Capacidad mensual ya no existe; Métodos conserva el comparador (automático desde 1.4)", async () => {
   const h = load({ storage: ES });
   await sleep(60);
   for (const id of ["budget-fields", "budget-calc", "budget-output", "budget-scenario", "scenario-income"]) assert.equal(h.doc.getElementById(id), null, id);
   assert.ok(h.doc.querySelector("#view-plan #plan-root"));
-  assert.ok(h.doc.querySelector("#view-methods #sim-calc"), "comparador de Métodos");
+  assert.ok(h.doc.querySelector("#view-methods #metodos-root"), "comparador de Métodos");
+  for (const id of ["sim-calc", "sim-load", "sim-budget", "simulation-rows"]) assert.equal(h.doc.getElementById(id), null, "sin formulario manual: " + id);
   assert.deepEqual(h.errors, []);
 });
 

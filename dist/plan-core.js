@@ -75,20 +75,37 @@
     return out;
   }
 
-  /* Simulación en una sola moneda. debts: [{ id, balance, rate, min }] (moneda del plan).
-     Trabaja en centavos para evitar errores de redondeo. */
+  /* Tasa mensual a partir de la tasa anual en %. Las deudas guardan la tasa nominal anual
+     (APR): mensual = APR / 12. Si una deuda indica rateType "EA" (efectiva anual), la tasa
+     mensual equivalente es (1 + EA)^(1/12) − 1. */
+  function monthlyRate(rate, rateType) {
+    const r = Math.max(0, Number(rate) || 0) / 100;
+    return rateType === "EA" ? Math.expm1(Math.log1p(r) / 12) : r / 12;
+  }
+  /* Lo que se debe este mes en la moneda de la deuda: saldo + interés del mes, cada uno
+     redondeado a la unidad de la moneda (COP pesos enteros, USD centavos), igual que la simulación. */
+  function owedThisMonth(d) {
+    const c = d.currency;
+    const b = Math.max(0, Number(d.balance) || 0);
+    return round(round(b, c) + round(b * monthlyRate(d.rate, d.rateType), c), c);
+  }
+
+  /* Simulación en una sola moneda. debts: [{ id, balance, rate, min, rateType? }] (moneda del plan).
+     Trabaja en centavos para evitar errores de redondeo.
+     Devuelve también, por deuda, el mes (YYYY-MM) y el número de mes (1 = primer mes) en que
+     queda pagada, y el orden en que se van pagando. */
   function simulate(debts, extra, method, startYm, maxMonths = MAX_MONTHS) {
     if (!["avalanche", "snowball"].includes(method)) throw new Error("Método inválido");
     const C = 100;
     const a = debts
       .filter((d) => Number(d.balance) > 0)
-      .map((d, i) => ({ id: String(d.id), balance: Math.round(d.balance * C), min: Math.round(Math.max(0, d.min) * C), monthly: Math.max(0, Number(d.rate) || 0) / 100 / 12, idx: i, interest: 0, payoff: null }));
+      .map((d, i) => ({ id: String(d.id), balance: Math.round(d.balance * C), min: Math.round(Math.max(0, d.min) * C), monthly: monthlyRate(d.rate, d.rateType), idx: i, payoffN: null, interest: 0, payoff: null }));
     const budget = a.reduce((s, d) => s + d.min, 0) + Math.round(Math.max(0, extra) * C);
     const first = new Map();
     let totalInterest = 0,
       months = 0,
       status = "paid";
-    if (!a.length) return { status, months: 0, payoffYm: startYm, totalInterest: 0, firstMonth: first, payoffs: {} };
+    if (!a.length) return { status, months: 0, payoffYm: startYm, totalInterest: 0, firstMonth: first, payoffs: {}, payoffMonths: {}, order: [] };
     for (let n = 1; n <= maxMonths; n++) {
       const live = a.filter((d) => d.balance > 0);
       for (const d of live) {
@@ -116,7 +133,11 @@
         paidNow.set(d.id, paidNow.get(d.id) + pay);
       }
       const ym = monthAdd(startYm, n - 1);
-      for (const d of live) if (d.balance === 0 && !d.payoff) d.payoff = ym;
+      for (const d of live)
+        if (d.balance === 0 && !d.payoff) {
+          d.payoff = ym;
+          d.payoffN = n;
+        }
       if (n === 1) for (const [id, c] of paidNow) first.set(id, c / C);
       months = n;
       if (a.every((d) => d.balance === 0)) break;
@@ -126,9 +147,17 @@
       }
       if (n === maxMonths) status = "never";
     }
-    const payoffs = {};
-    for (const d of a) payoffs[d.id] = d.payoff;
-    return { status, months, payoffYm: status === "paid" ? monthAdd(startYm, months - 1) : null, totalInterest: totalInterest / C, firstMonth: first, payoffs };
+    const payoffs = {},
+      payoffMonths = {};
+    for (const d of a) {
+      payoffs[d.id] = d.payoff;
+      payoffMonths[d.id] = d.payoffN;
+    }
+    const order = a
+      .filter((d) => d.payoffN)
+      .sort((x, y) => x.payoffN - y.payoffN || x.idx - y.idx)
+      .map((d) => d.id);
+    return { status, months, payoffYm: status === "paid" ? monthAdd(startYm, months - 1) : null, totalInterest: totalInterest / C, firstMonth: first, payoffs, payoffMonths, order };
   }
 
   /* Plan completo.
@@ -153,8 +182,8 @@
     const incomePlan = round(toPlan(income, incomeCurrency), planCurrency);
     const expensesPlan = round(toPlan(expensesTotal, incomeCurrency), planCurrency);
     // A minimum larger than what is owed only needs the balance plus this month's interest.
-    const owedNow = (d) => Number(d.balance) * (1 + Math.max(0, Number(d.rate)) / 1200);
-    const planDebts = debts.map((d) => ({ id: String(d.id), balance: toPlan(d.balance, d.currency), rate: Number(d.rate), min: toPlan(Math.min(Number(d.minPayment), owedNow(d)), d.currency) }));
+    const owedNow = (d) => Number(d.balance) * (1 + monthlyRate(d.rate, d.rateType));
+    const planDebts = debts.map((d) => ({ id: String(d.id), balance: toPlan(d.balance, d.currency), rate: Number(d.rate), rateType: d.rateType, min: toPlan(Math.min(Number(d.minPayment), owedNow(d)), d.currency) }));
     const minimumsPlan = round(planDebts.reduce((s, d) => s + d.min, 0), planCurrency);
     const free = round(incomePlan - expensesPlan - minimumsPlan, planCurrency);
     const maxExtra = Math.max(0, free);
@@ -168,9 +197,17 @@
       const id = String(d.id);
       const payPlan = withExtra.firstMonth.get(id) || 0;
       const minPlan = planDebts.find((x) => x.id === id).min;
-      // Converting back and forth can lose cents: never show less than the real minimum.
-      const realMin = round(Math.min(Number(d.minPayment), owedNow(d)), d.currency);
-      const payment = Math.max(round(convert(payPlan, planCurrency, d.currency, fx), d.currency), payPlan > 0 ? realMin : 0);
+      // Converting back and forth can lose or add cents. Rules, in the debt's own currency:
+      // never more than what is owed this month (balance + this month's interest); never less
+      // than the real minimum (which is itself capped at what is owed); and a debt the plan
+      // pays off this month gets exactly what is owed.
+      const owed = owedThisMonth(d);
+      const realMin = Math.min(round(Number(d.minPayment), d.currency), owed);
+      let payment = 0;
+      if (payPlan > 0) {
+        const back = round(convert(payPlan, planCurrency, d.currency, fx), d.currency);
+        payment = withExtra.payoffMonths[id] === 1 ? owed : Math.min(owed, Math.max(back, realMin));
+      }
       const day = dueDay(d);
       // If this month's due day already passed, the next payment date is next month's.
       let due = day ? dueDateIn(ym, day) : null;
@@ -229,5 +266,5 @@
     if (!validRate(used) || !validRate(current)) return false;
     return Math.abs(current - used) / used > threshold;
   }
-  return { CURRENCIES, MAX_MONTHS, round, validRate, convert, currenciesUsed, needsFx, missingFields, simulate, buildPlan, fxChanged, monthAdd, dueDateIn };
+  return { CURRENCIES, MAX_MONTHS, round, validRate, convert, currenciesUsed, needsFx, missingFields, monthlyRate, owedThisMonth, simulate, buildPlan, fxChanged, monthAdd, dueDateIn };
 });

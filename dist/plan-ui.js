@@ -111,6 +111,10 @@
     noDebtsPlan: "Agrega al menos una deuda para armar tu plan.",
     baseNever: "Solo con los mínimos no terminarías de pagar.",
     all: "Todo",
+    exitTitle: "¿Salir del asistente?",
+    exitText: "Perderás lo que llevas.",
+    exitStay: "Seguir en el asistente",
+    methodSaved: "Listo: tu plan ahora usa este método.",
   };
   window.MPDDStrings = Object.assign(window.MPDDStrings || {}, { plan: T });
   const EXPENSES = [
@@ -418,8 +422,13 @@
   }
 
   /* ---------------- wizard ---------------- */
-  function openWizard(fromSaved, fromDraft) {
+  function openWizard(fromSaved, fromDraft, opts) {
+    if (wizard) {
+      wizard.remove();
+      wizard = null;
+    }
     draft = fromDraft ? Object.assign(freshDraft(), fromDraft, { step: 5 }) : fromSaved ? draftFromSaved(fromSaved) : freshDraft();
+    if (opts && (opts.method === "avalanche" || opts.method === "snowball")) draft.method = opts.method;
     trmEditing = false;
     message = null;
     wizard = el("div", "plan-wizard");
@@ -429,10 +438,59 @@
     document.body.append(wizard);
     document.body.classList.add("plan-wizard-open");
     wizard.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") closeWizard();
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (wizard.querySelector(".pw-confirm")) hideExitConfirm();
+      else showExitConfirm();
     });
     if (fxNeeded(draft) || appDebts().some((x) => Number(x.balance) > 0 && x.currency !== draft.incomeCurrency)) ensureTRM().then(() => wizard && renderStep());
     renderStep();
+  }
+  /* Escape asks before leaving (in-app dialog, never window.confirm). */
+  function showExitConfirm() {
+    if (!wizard || wizard.querySelector(".pw-confirm")) return;
+    const back = document.activeElement;
+    const layer = el("div", "pw-confirm");
+    const box = el("div", "pw-confirm-box");
+    box.setAttribute("role", "alertdialog");
+    box.setAttribute("aria-modal", "true");
+    box.setAttribute("aria-labelledby", "pw-confirm-title");
+    box.setAttribute("aria-describedby", "pw-confirm-text");
+    const title = el("h3", "", T.exitTitle);
+    title.id = "pw-confirm-title";
+    const text = el("p", "", T.exitText);
+    text.id = "pw-confirm-text";
+    const stay = btn(T.exitStay, "save pw-confirm-stay", () => hideExitConfirm());
+    const leave = btn(T.close, "ghost pw-confirm-leave", () => closeWizard());
+    const actions = el("div", "pw-confirm-actions");
+    actions.append(leave, stay);
+    box.append(title, " ", text, actions);
+    layer.append(box);
+    // Keep keyboard focus inside the confirmation.
+    box.addEventListener("keydown", (e) => {
+      if (e.key !== "Tab") return;
+      const items = [leave, stay];
+      const i = items.indexOf(document.activeElement);
+      e.preventDefault();
+      items[(i + (e.shiftKey ? items.length - 1 : 1)) % items.length].focus();
+    });
+    layer._back = back;
+    for (const n of wizard.children) if (n !== layer) n.setAttribute("aria-hidden", "true");
+    wizard.append(layer);
+    stay.focus();
+  }
+  function hideExitConfirm() {
+    const layer = wizard && wizard.querySelector(".pw-confirm");
+    if (!layer) return;
+    layer.remove();
+    for (const n of wizard.children) n.removeAttribute("aria-hidden");
+    const back = layer._back;
+    if (back && back.isConnected && wizard.contains(back)) back.focus();
+    else {
+      const h = wizard.querySelector("h2");
+      if (h) h.focus();
+    }
   }
   function closeWizard() {
     if (wizard) wizard.remove();
@@ -817,26 +875,87 @@
     });
   }
 
-  /* Draft kept only for this browser tab session (sessionStorage) while the user signs in;
-     it is removed as soon as the plan is saved or discarded. The saved plan lives in Supabase. */
+  /* Unsaved draft while the user signs in. It is kept in sessionStorage and also in
+     localStorage with a timestamp, so a sign-in link (magic link or confirmation) opened in
+     ANOTHER tab can still offer "Continuar con tu plan". It expires after 24 hours and is
+     removed as soon as the plan is saved or discarded. The saved plan lives in Supabase.
+     While a restore is pending (restore journal present) localStorage is not touched. */
   const DRAFT_KEY = "mpdd-plan-draft-v1";
-  function keepDraft(d) {
+  const DRAFT_TTL = 24 * 60 * 60 * 1000;
+  const JOURNAL = "nando-restore-journal-v1";
+  const restorePending = () => {
     try {
-      sessionStorage.setItem(DRAFT_KEY, JSON.stringify(Object.assign({}, d, { step: 5 })));
+      return localStorage.getItem(JOURNAL) !== null;
+    } catch (_) {
+      return true;
+    }
+  };
+  const validDraft = (v) => v && typeof v === "object" && Array.isArray(v.expenses) && ["USD", "COP"].includes(v.incomeCurrency);
+  function readEntry(store) {
+    try {
+      const v = JSON.parse(store.getItem(DRAFT_KEY) || "null");
+      if (!v || typeof v !== "object") return null;
+      if (validDraft(v)) return { savedAt: null, local: false, draft: v }; // 1.3 format (sessionStorage only)
+      if (typeof v.savedAt === "number" && validDraft(v.draft)) return v;
+    } catch (_) {}
+    return null;
+  }
+  function keepDraft(d) {
+    const entry = { savedAt: Date.now(), local: false, draft: Object.assign({}, d, { step: 5 }) };
+    if (!restorePending()) {
+      try {
+        localStorage.setItem(DRAFT_KEY, JSON.stringify(Object.assign({}, entry, { local: true })));
+        entry.local = true;
+      } catch (_) {}
+    }
+    try {
+      sessionStorage.setItem(DRAFT_KEY, JSON.stringify(entry));
     } catch (_) {}
   }
   function pendingDraft() {
+    const now = Date.now();
+    const fresh = (e) => e && (e.savedAt === null || (now - e.savedAt >= 0 && now - e.savedAt < DRAFT_TTL));
+    let local = null,
+      session = null;
     try {
-      const v = JSON.parse(sessionStorage.getItem(DRAFT_KEY) || "null");
-      if (v && typeof v === "object" && Array.isArray(v.expenses) && ["USD", "COP"].includes(v.incomeCurrency)) return v;
+      local = readEntry(localStorage);
     } catch (_) {}
-    return null;
+    try {
+      session = readEntry(sessionStorage);
+    } catch (_) {}
+    if (local && !fresh(local)) {
+      if (!restorePending())
+        try {
+          localStorage.removeItem(DRAFT_KEY);
+        } catch (_) {}
+      local = null;
+    }
+    if (session && !fresh(session)) session = null;
+    // This tab's copy was also in localStorage, and another tab already saved or discarded it.
+    if (session && session.local && (!local || local.savedAt !== session.savedAt)) {
+      try {
+        sessionStorage.removeItem(DRAFT_KEY);
+      } catch (_) {}
+      session = null;
+    }
+    const best = local && (!session || local.savedAt >= (session.savedAt || 0)) ? local : session;
+    return best ? best.draft : null;
   }
   function dropDraft() {
     try {
       sessionStorage.removeItem(DRAFT_KEY);
     } catch (_) {}
+    if (!restorePending())
+      try {
+        localStorage.removeItem(DRAFT_KEY);
+      } catch (_) {}
   }
+  // Another tab saved, discarded or created a draft: refresh the Plan tab.
+  window.addEventListener("storage", (e) => {
+    if (e.key !== DRAFT_KEY) return;
+    pendingDraft(); // drops this tab's copy if another tab saved or discarded it
+    if (!wizard) renderTab();
+  });
 
   /* ---------------- saving ---------------- */
   function rowFrom(d, r) {
@@ -855,7 +974,7 @@
       items: r.items.map((it) => ({ debtId: it.debtId, name: it.name, currency: it.currency, payment: it.payment, approx: it.approx, first: it.first, dueDate: it.dueDate })),
     };
   }
-  async function savePlan(d, r, silent) {
+  async function savePlan(d, r, silent, okMessage) {
     const res = await Cloud().savePlan(rowFrom(d, r));
     if (!res.ok) {
       if (silent) {
@@ -867,7 +986,7 @@
     saved = res.plan;
     dropDraft();
     addReminders(r);
-    message = T.saved;
+    message = okMessage || T.saved;
     try {
       if (window.MPDDSchedule && !MPDDSchedule.readAvisos(localStorage).enabled) message += " " + T.remindersOff;
     } catch (_) {}
@@ -906,6 +1025,28 @@
     },
     current: () => saved,
     open: () => openWizard(saved),
+    /* 1.4: change the saved plan's method (from the Métodos tab). Recomputes the items with
+       the same data and rate used in the plan, and saves like savePlan (needs a session).
+       With no session or no saved plan, opens the assistant with that method preselected. */
+    async setMethod(method) {
+      if (method !== "avalanche" && method !== "snowball") return { ok: false, error: "method" };
+      if (!signedIn() || !saved) {
+        openWizard(saved, null, { method });
+        return { ok: false, opened: true };
+      }
+      const d = draftFromSaved(saved);
+      d.method = method;
+      d.useSavedFx = true;
+      let r;
+      try {
+        r = compute(d);
+      } catch (_) {
+        openWizard(saved, null, { method });
+        return { ok: false, opened: true };
+      }
+      const ok = await savePlan(d, r, true, T.methodSaved);
+      return { ok };
+    },
   };
 
   /* ---------------- loading ---------------- */

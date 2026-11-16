@@ -1,0 +1,48 @@
+/* Versión 1.4: pestaña Métodos (comparador automático) y confirmación al salir del asistente. */
+.met-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:6px 0 10px}
+.met-switch button{min-width:64px;min-height:40px}
+.met-options{margin:4px 0 12px}.met-options summary{cursor:pointer;font-weight:700;color:#285a42;font-size:14px;padding:6px 0}
+.met-options .field{max-width:260px}
+.met-payment{font-size:16px;margin:8px 0}
+.met-noplan,.met-skipped,.met-trm-missing{margin:10px 0}
+.met-noplan p,.met-skipped p{margin:0 0 8px}
+.met-trm{margin:6px 0 0}
+.met-cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:14px 0}
+@media(max-width:560px){.met-cards{grid-template-columns:1fr}}
+.met-card{background:#fff;border:1px solid #e1e9e1;border-radius:16px;padding:14px 16px;min-width:0}
+.met-card.recommended{border:2px solid #146a55;background:#f1faf4;box-shadow:0 6px 18px #146a5522}
+.met-card h3{margin:0 0 2px;font-size:20px}.met-card .label{margin:0 0 8px}
+.met-line{margin:6px 0;line-height:1.4;overflow-wrap:anywhere}.met-line strong{font-size:17px}
+.met-approx{font-size:11px;padding:2px 8px}
+.met-summary{background:#0b1f1d;color:#fff;border-radius:16px;padding:14px 16px;margin:8px 0 18px}
+.met-summary p{margin:4px 0;line-height:1.45}.met-summary strong{color:#d6edb2}
+.met-summary .label{color:#c5d6cb}.met-summary .error{color:#ffd2c8}
+.met-more{background:#fff;border:1px solid #e1e9e1;border-radius:16px;padding:14px 16px;margin:12px 0;display:flex;flex-direction:column;gap:8px}
+.met-more h3{margin:0;font-size:18px}.met-more label{font-size:13px;font-weight:700;color:#536d5c}
+.met-more input[type=range]{width:100%;accent-color:#146a55;height:32px}
+.met-extra-value{font-size:20px}.met-more-text{margin:0;line-height:1.45}
+.met-timeline{margin:16px 0}.met-timeline h3{font-size:18px;margin:0 0 8px}
+.met-tl{margin:10px 0 14px}.met-tl h4{margin:0 0 6px;font-size:15px}
+.met-bar{display:flex;height:26px;border-radius:8px;overflow:hidden;background:#e8ede6;border:1px solid #d6e1d7}
+.met-seg{display:flex;align-items:center;justify-content:center;min-width:0;overflow:hidden;font-size:12px;font-weight:800;color:#fff;border-right:2px solid #fff}
+.met-seg:last-child{border-right:0}
+.met-seg-0{background:#146a55}.met-seg-1{background:#3f7fb0}.met-seg-2{background:#a3611c}.met-seg-3{background:#6d4fa3}.met-seg-4{background:#2f5e3a}
+.met-seg-never{background:repeating-linear-gradient(45deg,#cfd8d1 0 6px,#e8ede6 6px 12px);color:#41584a}
+.met-tl-list{margin:8px 0 0;padding-left:22px;font-size:14px;line-height:1.5}
+.met-motive{border:1px solid #e1e9e1;border-radius:16px;padding:12px 16px;margin:12px 0;background:#fff}
+.met-motive legend{font-weight:800;font-size:17px;padding:0 4px}
+.met-motive-option{display:flex;align-items:center;gap:8px;min-height:44px;font-size:15px;cursor:pointer}
+.met-motive-option input{width:20px;height:20px;accent-color:#146a55}
+.met-rec{margin:6px 0 0;font-weight:700;color:#146a55}
+.met-final{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:10px 0}
+.met-final button{min-height:46px;padding:10px 18px;border-radius:12px;font-weight:800;text-decoration:none}
+.met-final .ghost{border:1px solid #cfdcd1}
+.met-has{margin:0}
+.met-empty p{margin:0 0 10px}
+/* Asistente del plan: "¿Salir del asistente?" */
+.pw-confirm{position:absolute;inset:0;z-index:5;background:#0b1f1d99;display:flex;align-items:center;justify-content:center;padding:18px}
+.pw-confirm-box{background:#fff;border-radius:18px;padding:20px;max-width:420px;width:100%;box-shadow:0 18px 40px #0005}
+.pw-confirm-box h3{margin:0 0 4px;font-size:20px}.pw-confirm-box p{margin:0 0 14px;color:#536d5c}
+.pw-confirm-actions{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
+.pw-confirm-actions button{min-height:46px;padding:10px 18px;border-radius:12px;font-weight:800;text-decoration:none}
+.pw-confirm-actions .ghost{border:1px solid #cfdcd1}
