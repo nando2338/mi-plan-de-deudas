@@ -73,6 +73,36 @@ La función está en `supabase/functions/delete-account/index.ts` y **no se ha d
 9. **Publicar.** Sube `dist/` como siempre. Si cambias `config.js` después, no hace falta cambiar la versión del service worker: ese archivo se pide primero a la red.
 10. **Legal.** Completa los marcadores resaltados de `privacidad.html` y `terminos.html` (responsable, identificación, correo, región, retención) y haz que un abogado revise ambos textos antes de abrir las cuentas al público.
 
+## Versión 1.4
+
+Novedades (sin anuncios, mismo diseño para celular y computador):
+
+- **Métodos:** comparador automático de bola de nieve y avalancha con las deudas y el pago del Plan, barra "¿Y si pagas un poco más?", línea de tiempo y botón "Usar [método] en mi plan".
+- **Calendario:** todos los días con pagos marcados (pendiente, pagado, vencido; hoy con borde), número de pagos por día, leyenda y lista "Próximos pagos" (reemplaza la pestaña Avisos).
+- **Gráfico:** "Lo que debo" (este mes y deuda total) con dona por deuda, etiquetas "Más cara" y "Más pequeña" y consejo; "Lo que pagué" sigue disponible.
+- **Notificaciones push reales** (Android con Chrome, iPhone con la app instalada, computador con Chrome), configuradas en *Más → Ajustes*, y archivo `.ics` para el calendario del teléfono.
+- **Cuenta más visible:** ícono arriba a la derecha, tarjeta en Inicio para quien no tiene cuenta y avisos para crearla en momentos importantes.
+
+### Cómo funcionan las notificaciones
+
+- Tablas `push_subscriptions` (una fila por usuario y dispositivo) y `push_settings` (activar, días antes, hora y zona horaria), ambas con RLS: cada usuario solo ve lo suyo.
+- Función `enviar-recordatorios` (`supabase/functions/enviar-recordatorios/`):
+  - `GET` devuelve la clave pública VAPID.
+  - `POST {"accion":"prueba"}` con la sesión del usuario envía la notificación de prueba.
+  - `POST {"accion":"programado"}` la llama `pg_cron` cada 15 minutos con un secreto guardado en Vault.
+- Las claves VAPID las genera la propia función la primera vez y quedan **solo en Supabase Vault** (`mpdd_vapid_private`, `mpdd_vapid_public`). No están en el código ni en el repositorio.
+- El cifrado de los mensajes (RFC 8291) y la firma VAPID (RFC 8292) usan solo WebCrypto, sin librerías externas. Las suscripciones que ya no existen (respuesta 404/410) se borran solas.
+- Los avisos se envían desde la hora elegida (en la zona horaria del usuario) y una sola vez por cuota (`debt_private.push_sent`). No se envían correos.
+- Las notificaciones usan las deudas sincronizadas con la cuenta: hace falta iniciar sesión.
+
+Pruebas de la función: `cd tests/push && deno run --allow-env --allow-read push.deno.ts` (descifra los mensajes con la librería de referencia `http_ece`).
+
+### Volver a la 1.3
+
+- **Lo más rápido:** Netlify → *Deploys* → despliegue anterior → *Publish deploy*.
+- **Desde GitHub:** Netlify → *Production branch* = `respaldo-v1.3` → *Save* → *Trigger deploy*.
+- **Supabase:** la 1.3 no usa nada de la 1.4, así que no hace falta deshacer nada. Para detener los avisos: `select cron.unschedule('mpdd-enviar-recordatorios');` en el SQL Editor. Los demás comandos están al final de la migración 1.4.
+
 ## Versión 1.3
 
 - **Nueva pestaña Plan** (reemplaza "Capacidad mensual", que se eliminó junto con "Comparar escenario"; el comparador "Comparar estrategias" de Métodos se mantiene). Sin plan muestra "Arma tu plan en 2 minutos" con "Empezar"; con plan muestra el plan del mes y "Ajustar mi plan", que abre el asistente con los datos llenos.
