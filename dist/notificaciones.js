@@ -70,8 +70,8 @@
     win = win || root;
     if (win.MPDDAccount && typeof win.MPDDAccount.ask === "function") {
       try {
-        win.MPDDAccount.ask("notifications");
-        return;
+        // ask() returns false when it doesn't open anything (accounts off): go to Más.
+        if (win.MPDDAccount.ask("notifications") !== false) return;
       } catch (_) {}
     }
     if (typeof win.MPDDNavigate === "function") win.MPDDNavigate("more");
