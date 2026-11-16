@@ -292,7 +292,7 @@ test("textos nuevos traducidos al inglés", async () => {
   assert.match(e.doc.getElementById("view-calendar").textContent, /Payment calendar/);
   assert.match(e.doc.getElementById("view-chart").textContent, /Payments by period/);
   assert.match(e.doc.getElementById("view-more").textContent, /Export payments \(CSV\)/);
-  assert.deepEqual([...e.doc.querySelectorAll(".bottom-nav button")].map((b) => b.textContent.replace(/\d+/g, "")), ["Home", "Plan", "Methods", "Calendar", "Chart", "Alerts", "More"]);
+  assert.deepEqual([...e.doc.querySelectorAll(".bottom-nav button")].map((b) => b.textContent.replace(/\d+/g, "")), ["Home", "Plan", "Methods", "Calendar", "Chart", "More"]); // 1.4: the "Alerts" tab was removed
 });
 
 test("actualización: aviso 'Nueva versión disponible – Actualizar' y salto del service worker", async () => {

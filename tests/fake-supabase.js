@@ -20,6 +20,67 @@ class FakeServer {
     this.trm = { status: 200, body: { fecha: "2026-11-15", valor: 4000, fuente: "Superintendencia Financiera de Colombia", desactualizada: false } };
     this.trmCalls = 0;
     this.seq = 0;
+    // 1.4 push: tables push_subscriptions / push_settings and the "enviar-recordatorios" function.
+    this.pushSubs = []; // rows { id, user_id, endpoint, p256dh, auth, user_agent, created_at, updated_at }
+    this.pushSettings = new Map(); // uid -> row
+    this.pushPublicKey = "BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U";
+    this.pushCalls = [];
+    this.pushFunctionStatus = null; // force a status for POST (e.g. 500)
+  }
+  tokenUser(token) {
+    for (const u of this.users.values()) if (token === "Bearer fake-token-" + u.id) return u.id;
+    return null;
+  }
+  pushFunction(init) {
+    const method = String(init.method || "GET").toUpperCase();
+    const headers = init.headers || {};
+    const reply = (status, body) => ({ ok: status >= 200 && status < 300, status, json: async () => JSON.parse(JSON.stringify(body)) });
+    this.pushCalls.push({ method, headers: Object.assign({}, headers), body: init.body === undefined ? undefined : String(init.body) });
+    if (this.offline) return Promise.reject(new TypeError("Failed to fetch"));
+    if (!headers.apikey) return reply(401, { error: "sin_apikey" });
+    if (method === "GET") return reply(200, { publicKey: this.pushPublicKey });
+    if (this.pushFunctionStatus) return reply(this.pushFunctionStatus, { error: "error" });
+    const uid = this.tokenUser(headers.Authorization);
+    if (!uid) return reply(401, { error: "no_autorizado" });
+    let body = null;
+    try {
+      body = JSON.parse(init.body);
+    } catch (_) {}
+    if (!body || body.accion !== "prueba") return reply(400, { error: "accion" });
+    const n = this.pushSubs.filter((r) => r.user_id === uid).length;
+    if (!n) return reply(404, { error: "sin_suscripciones" });
+    return reply(200, { ok: true, enviadas: n, borradas: 0 });
+  }
+  pushTable(table, op, row, filters, me) {
+    const match = (r) => r.user_id === me && filters.every(([c, v]) => r[c] === v);
+    const now = new Date().toISOString();
+    if (table === "push_subscriptions") {
+      if (op === "upsert") {
+        if (row.user_id !== me) return { data: null, error: { code: "42501", message: "new row violates row-level security" } };
+        if (typeof row.endpoint !== "string" || typeof row.p256dh !== "string" || typeof row.auth !== "string" || (row.user_agent && row.user_agent.length > 300)) return { data: null, error: { code: "23514", message: "check violation" } };
+        const cur = this.pushSubs.find((r) => r.user_id === me && r.endpoint === row.endpoint);
+        if (cur) Object.assign(cur, row, { updated_at: now });
+        else this.pushSubs.push(Object.assign({ id: "sub-" + ++this.seq, created_at: now }, row, { updated_at: now }));
+        return { data: null, error: null };
+      }
+      if (op === "delete") {
+        this.pushSubs = this.pushSubs.filter((r) => !match(r));
+        return { data: null, error: null };
+      }
+      return { data: this.pushSubs.filter(match).map((r) => Object.assign({}, r)), error: null };
+    }
+    if (op === "upsert") {
+      if (row.user_id !== me) return { data: null, error: { code: "42501", message: "new row violates row-level security" } };
+      if (typeof row.enabled !== "boolean" || ![1, 3, 7].includes(row.days_before) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(row.send_time) || typeof row.tz !== "string" || row.tz.length > 64 || !["es", "en"].includes(row.lang)) return { data: null, error: { code: "23514", message: "check violation" } };
+      this.pushSettings.set(me, Object.assign({}, row, { updated_at: now }));
+      return { data: null, error: null };
+    }
+    if (op === "delete") {
+      this.pushSettings.delete(me);
+      return { data: null, error: null };
+    }
+    const r = this.pushSettings.get(me);
+    return { data: r ? [Object.assign({}, r)] : [], error: null };
   }
   addUser(email, password) {
     const id = "00000000-0000-4000-8000-" + String(++this.seq).padStart(12, "0");
@@ -197,7 +258,7 @@ function createFakeLib(server, win) {
       },
       from(table) {
         const uid = () => (getSession() ? getSession().user.id : null);
-        const q = { table, filter: null, op: "select", row: null };
+        const q = { table, filter: null, filters: [], op: "select", row: null, upsertOptions: null };
         const done = (result) => Promise.resolve(result);
         const b = {
           select() {
@@ -205,11 +266,13 @@ function createFakeLib(server, win) {
           },
           eq(col, v) {
             q.filter = [col, v];
+            q.filters.push([col, v]);
             return b;
           },
-          upsert(row) {
+          upsert(row, opts) {
             q.op = "upsert";
             q.row = row;
+            q.upsertOptions = opts || null;
             return b;
           },
           delete() {
@@ -217,8 +280,13 @@ function createFakeLib(server, win) {
             return b;
           },
           run() {
-            server.calls.push(["table", table, q.op]);
+            server.calls.push(["table", table, q.op, q.upsertOptions]);
             if (server.offline) return { data: null, error: { message: "Failed to fetch" } };
+            if (table === "push_subscriptions" || table === "push_settings") {
+              const me = uid();
+              if (!me) return { data: null, error: { code: "42501", message: "rls" } };
+              return server.pushTable(table, q.op, q.row, q.filters, me);
+            }
             if (table !== "debt_plans") return { data: null, error: { code: "42P01", message: "no table" } };
             const me = uid();
             if (!me) return { data: null, error: { code: "42501", message: "rls" } };

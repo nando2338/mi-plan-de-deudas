@@ -936,6 +936,118 @@
   api.pendingCount = () => pendingCount(readState());
   api._internals = { scan, readState, writeState, LIB_URL, LIB_SRI, STATE_KEY, ACTIVE_KEY, PREBACKUP_KEY };
 
+  /* ================= 1.4 Notificaciones push (api.push*) =================
+     Tables push_subscriptions / push_settings (RLS: own rows) and the Edge Function
+     "enviar-recordatorios". Only the publishable key and the user's own session token
+     are sent. Endpoints, keys and tokens are never logged. */
+  const PUSH_FN = "/functions/v1/enviar-recordatorios";
+  const PUSH_DEVICE_KEY = "mpdd-push-device-v1";
+  const pushUrl = () => String(CFG.supabaseUrl).replace(/\/$/, "") + PUSH_FN;
+  function pushTimeout(promise, ms) {
+    return Promise.race([promise, new Promise((resolve) => setTimeout(() => resolve(null), ms))]);
+  }
+  api.pushPublicKey = async () => {
+    if (status.config !== "ok") return { ok: false, error: "config" };
+    if (navigator.onLine === false) return { ok: false, error: "network" };
+    try {
+      const res = await fetch(pushUrl(), { method: "GET", headers: { apikey: CFG.supabaseKey }, cache: "no-store" });
+      if (!res.ok) return { ok: false, error: "server" };
+      const d = await res.json();
+      const key = d && typeof d.publicKey === "string" ? d.publicKey : "";
+      if (!/^[A-Za-z0-9_-]{40,200}={0,2}$/.test(key)) return { ok: false, error: "server" };
+      return { ok: true, publicKey: key };
+    } catch (_) {
+      return { ok: false, error: "network" };
+    }
+  };
+  api.pushSaveSubscription = async (subscription) => {
+    if (!status.userId) return { ok: false, error: "notSignedIn" };
+    if (navigator.onLine === false) return { ok: false, error: "network" };
+    let json;
+    try {
+      json = typeof subscription.toJSON === "function" ? subscription.toJSON() : subscription;
+    } catch (_) {
+      json = null;
+    }
+    const keys = (json && json.keys) || {};
+    if (!json || typeof json.endpoint !== "string" || !/^https:\/\//.test(json.endpoint) || typeof keys.p256dh !== "string" || typeof keys.auth !== "string") return { ok: false, error: "subscribe" };
+    const row = { user_id: status.userId, endpoint: json.endpoint, p256dh: keys.p256dh, auth: keys.auth, user_agent: String(navigator.userAgent || "").slice(0, 300), updated_at: nowISO() };
+    try {
+      const c = await getClient();
+      const { error } = await c.from("push_subscriptions").upsert(row, { onConflict: "user_id,endpoint" });
+      return error ? { ok: false, error: "server" } : { ok: true };
+    } catch (_) {
+      return { ok: false, error: "network" };
+    }
+  };
+  api.pushDeleteSubscription = async (endpoint) => {
+    if (!status.userId) return { ok: false, error: "notSignedIn" };
+    if (typeof endpoint !== "string" || !endpoint) return { ok: false, error: "subscribe" };
+    try {
+      const c = await getClient();
+      const { error } = await c.from("push_subscriptions").delete().eq("user_id", status.userId).eq("endpoint", endpoint);
+      return error ? { ok: false, error: "server" } : { ok: true };
+    } catch (_) {
+      return { ok: false, error: "network" };
+    }
+  };
+  api.pushSaveSettings = async (s) => {
+    if (!status.userId) return { ok: false, error: "notSignedIn" };
+    if (navigator.onLine === false) return { ok: false, error: "network" };
+    const valid = s && typeof s.enabled === "boolean" && [1, 3, 7].includes(s.days_before) && /^([01]\d|2[0-3]):[0-5]\d$/.test(String(s.send_time)) && typeof s.tz === "string" && s.tz.length <= 64 && ["es", "en"].includes(s.lang);
+    if (!valid) return { ok: false, error: "badData" };
+    const row = { user_id: status.userId, enabled: s.enabled, days_before: s.days_before, send_time: s.send_time, tz: s.tz, lang: s.lang, updated_at: nowISO() };
+    try {
+      const c = await getClient();
+      const { error } = await c.from("push_settings").upsert(row, { onConflict: "user_id" });
+      return error ? { ok: false, error: "server" } : { ok: true };
+    } catch (_) {
+      return { ok: false, error: "network" };
+    }
+  };
+  api.pushTest = async () => {
+    if (!status.userId) return { ok: false, error: "notSignedIn" };
+    if (navigator.onLine === false) return { ok: false, error: "network" };
+    try {
+      const c = await getClient();
+      const { data } = await c.auth.getSession();
+      const token = data && data.session && data.session.access_token;
+      if (!token) return { ok: false, error: "auth" };
+      const res = await fetch(pushUrl(), { method: "POST", headers: { apikey: CFG.supabaseKey, Authorization: "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify({ accion: "prueba" }), cache: "no-store" });
+      let d = null;
+      try {
+        d = await res.json();
+      } catch (_) {}
+      if (res.ok && d && d.ok) return { ok: true, enviadas: Number(d.enviadas) || 0, borradas: Number(d.borradas) || 0 };
+      if (res.status === 404 && d && d.error === "sin_suscripciones") return { ok: false, error: "sin_suscripciones" };
+      if (res.status === 401) return { ok: false, error: "auth" };
+      return { ok: false, error: "server" };
+    } catch (_) {
+      return { ok: false, error: "network" };
+    }
+  };
+  /* Best effort, before signing out: forget this device so the account stops sending to it. */
+  async function pushForgetDevice() {
+    try {
+      const sw = navigator.serviceWorker;
+      const reg = sw && typeof sw.getRegistration === "function" ? await sw.getRegistration() : null;
+      const sub = reg && reg.pushManager ? await reg.pushManager.getSubscription() : null;
+      if (sub) {
+        if (status.userId) await api.pushDeleteSubscription(sub.endpoint);
+        await sub.unsubscribe();
+      }
+    } catch (_) {}
+    try {
+      ls.removeItem(PUSH_DEVICE_KEY);
+    } catch (_) {}
+  }
+  const signOutWithoutPush = api.signOut;
+  api.signOut = async (opts) => {
+    if (status.userId) await pushTimeout(pushForgetDevice(), 4000);
+    return signOutWithoutPush(opts);
+  };
+  /* ================= fin 1.4 Notificaciones push ================= */
+
   /* ---------------- boot ---------------- */
   let bootTimer = null;
   function boot() {

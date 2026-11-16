@@ -34,3 +34,6 @@
 .csv-out a{display:inline-block;margin-top:6px;text-decoration:none}
 .update-banner{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(74px + env(safe-area-inset-bottom));z-index:60;background:#0b1f1d;color:#fff;padding:10px 14px;border-radius:12px;box-shadow:0 8px 24px #0004;display:flex;align-items:center;gap:6px;max-width:calc(100vw - 24px);flex-wrap:wrap;font-weight:700}
 .update-banner button{background:#d6edb2;color:#163c2b;border:0;border-radius:8px;padding:8px 12px;font:inherit;font-weight:800;cursor:pointer}
+
+/* 1.4 Notificaciones */
+.notifications-block .actions{flex-wrap:wrap}.notifications-block #push-enable{background:#e7f3df;border-color:#cfe5c4}.push-device{font-weight:700}.push-steps{margin:6px 0 10px;padding-left:20px;font-size:13px;line-height:1.45;color:#40584a}.push-help button{margin-top:4px}

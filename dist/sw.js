@@ -1,6 +1,6 @@
 // Cambia en cada versión publicada: así el navegador detecta la versión nueva.
 const CACHE='mpd-cache-v1.4';
-const ASSETS=['/manifest.webmanifest','/icon-192.png','/icon-512.png','/icon-maskable.png','/icon-180.png','/icon-32.png','/app-version.js','/existing-install.js','/navigation-views.css','/navigation-views.js','/education-help-v2.css','/education-help-v2.js','/backup-validation.js','/backup-safe.js','/backup-preferences.js','/debt-engine.js','/candidate-finance.js','/reminders.js','/reminders-ui.js','/reminders-today.js','/foreground-notices.js','/foreground-notices-ui.js','/i18n.js','/config.js','/cloud-core.js','/cloud-sync.js','/account-ui.js','/account.css','/privacidad.html','/terminos.html','/legal.css','/legal.js','/money.js','/schedule-core.js','/calendario.js','/grafico.js','/ajustes-v12.js','/actualizacion.js','/v12.css','/plan-core.js','/plan-ui.js','/plan.css'];
+const ASSETS=['/manifest.webmanifest','/icon-192.png','/icon-512.png','/icon-maskable.png','/icon-180.png','/icon-32.png','/app-version.js','/existing-install.js','/navigation-views.css','/navigation-views.js','/education-help-v2.css','/education-help-v2.js','/backup-validation.js','/backup-safe.js','/backup-preferences.js','/debt-engine.js','/candidate-finance.js','/reminders.js','/reminders-ui.js','/reminders-today.js','/foreground-notices.js','/foreground-notices-ui.js','/i18n.js','/config.js','/cloud-core.js','/cloud-sync.js','/account-ui.js','/account.css','/privacidad.html','/terminos.html','/legal.css','/legal.js','/money.js','/schedule-core.js','/calendario.js','/grafico.js','/ajustes-v12.js','/actualizacion.js','/v12.css','/plan-core.js','/plan-ui.js','/plan.css','/notificaciones.js'];
 // Exact, version-pinned supabase-js file (verified by SRI in the page). It contains no user data.
 const LIB='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js';
 // Always fetched from the network first so a new config.js takes effect without a new cache version.
@@ -28,3 +28,12 @@ if(home){event.respondWith(caches.open(CACHE).then(c=>c.match('/offline-home')).
 event.respondWith(fetch(req).catch(async()=>await caches.match('/offline-home')||Response.error()));return}
 if(NETWORK_FIRST.includes(url.pathname)){event.respondWith(fetch(req).then(async r=>{if(r.ok)await(await caches.open(CACHE)).put(url.pathname,r.clone());return r}).catch(()=>caches.match(url.pathname).then(r=>r||Response.error())));return}
 if(ASSETS.includes(url.pathname))event.respondWith(caches.open(CACHE).then(cache=>cache.match(url.pathname)).then(cached=>cached||fetch(req)))});
+// 1.4 Web push: reminders sent by the account's server (payload is JSON text).
+const PUSH_DEFAULT_URL='/?vista=calendario';
+function pushUrl(raw){try{const u=new URL(typeof raw==='string'?raw:PUSH_DEFAULT_URL,self.location.origin);return u.origin===self.location.origin?u.pathname+u.search:PUSH_DEFAULT_URL}catch(_){return PUSH_DEFAULT_URL}}
+self.addEventListener('push',event=>{let d=null;try{d=event.data?JSON.parse(event.data.text()):null}catch(_){d=null}if(!d||typeof d!=='object'||Array.isArray(d))d={};
+const title=typeof d.title==='string'&&d.title.trim()?d.title.slice(0,120):'Mi Plan de Deudas';const body=typeof d.body==='string'?d.body.slice(0,400):'';const tag=typeof d.tag==='string'&&d.tag?d.tag.slice(0,120):'mpdd-recordatorio';
+event.waitUntil(self.registration.showNotification(title,{body,icon:'/icon-192.png',badge:'/icon-192.png',tag,data:{url:pushUrl(d.url)}}))});
+// Tap: focus an open window of the app (and show the requested tab) or open the app.
+self.addEventListener('notificationclick',event=>{event.notification.close();const url=pushUrl(event.notification.data&&event.notification.data.url);
+event.waitUntil(self.clients.matchAll({type:'window',includeUncontrolled:true}).then(list=>{for(const c of list){let same=false;try{same=new URL(c.url).origin===self.location.origin}catch(_){}if(same&&'focus' in c){c.postMessage({type:'MPDD_OPEN',url});return c.focus()}}return self.clients.openWindow?self.clients.openWindow(url):undefined}))});
