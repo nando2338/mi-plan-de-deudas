@@ -63,7 +63,8 @@
     return monthStart(today);
   }
   /* Cuotas mensuales entre from y to (inclusive). */
-  function installments(debts, { from, to, today }) {
+  /* planned (opcional): { "<debtId>|YYYY-MM": monto } del plan del mes (1.3). */
+  function installments(debts, { from, to, today, planned }) {
     if (!validDate(from) || !validDate(to) || !validDate(today)) throw new TypeError("Fechas inválidas");
     const out = [];
     for (const debt of debts || []) {
@@ -102,7 +103,8 @@
           category: categoryLabel(debt),
           dueDate,
           status,
-          expected: minPayment(debt),
+          expected: planned && Number(planned[String(debt.id) + "|" + dueDate.slice(0, 7)]) > 0 ? Number(planned[String(debt.id) + "|" + dueDate.slice(0, 7)]) : minPayment(debt),
+          planned: !!(planned && Number(planned[String(debt.id) + "|" + dueDate.slice(0, 7)]) > 0),
           payment: payment ? { amount: Number(payment.amount), date: payment.date } : null,
         });
       }
@@ -133,13 +135,13 @@
     map[currency] = (map[currency] || 0) + n;
   }
   /* "Por pagar este mes" y "Pagado este mes", separados por moneda. */
-  function monthSummary(debts, year, month, today) {
+  function monthSummary(debts, year, month, today, planned) {
     const from = year + "-" + pad(month) + "-01",
       to = monthEnd(year, month);
     const toPay = {},
       paid = {};
     let unknown = 0;
-    for (const it of installments(debts, { from, to, today })) {
+    for (const it of installments(debts, { from, to, today, planned })) {
       if (it.payment) continue;
       if (it.expected === null) unknown++;
       else addTo(toPay, it.currency, it.expected);

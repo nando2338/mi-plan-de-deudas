@@ -78,7 +78,7 @@ test("el panel Cuenta y el encabezado se muestran en inglés", async () => {
   assert.match(h.doc.querySelector(".legal-links").textContent, /Privacy policy/);
 });
 
-test("modo sin cuenta: flujos existentes intactos (agregar, pagar, ordenar, presupuesto, recordatorios)", async () => {
+test("modo sin cuenta: flujos existentes intactos (agregar, pagar, ordenar, plan, recordatorios)", async () => {
   const h = load({ storage: { "deudas-lang-v1": "es" } });
   await sleep(50);
   const { doc, win } = h;
@@ -99,10 +99,8 @@ test("modo sin cuenta: flujos existentes intactos (agregar, pagar, ordenar, pres
   doc.getElementById("sort").dispatchEvent(new win.Event("change"));
   assert.equal(win.localStorage.getItem("nando-deudas-sort-v1"), "balance-desc");
   assert.equal(doc.querySelector("#cards h3").textContent, "Tarjeta");
-  // Presupuesto
-  doc.getElementById("budget-income").value = "1000";
-  doc.getElementById("budget-calc").click();
-  assert.match(doc.getElementById("budget-output").textContent, /guardado en este dispositivo/);
+  // 1.3: "Capacidad mensual" was replaced by the Plan assistant (tested in plan-1-3.test.js).
+  assert.ok(doc.getElementById("plan-root"));
   // Recordatorios
   doc.getElementById("rem-open").click();
   const remForm = doc.querySelector("#rem-content form");

@@ -1,7 +1,7 @@
 /* Educational explanations only. Does not read or modify financial records. */
 (()=>{'use strict';
 const definitions={
- plan:['Calcula cuánto queda para las deudas después de ingresos, gastos y pagos mínimos. Registra cada gasto una sola vez.','Calculate what remains for debts after income, expenses and minimum payments. Enter each expense only once.'],
+ plan:['Un asistente de 5 pasos calcula cuánto te queda libre cada mes después de lo básico y los mínimos, y te dice a qué deuda ponerle el extra.','A 5-step assistant works out what is left each month after basics and minimums, and tells you which debt gets the extra.'],
  income:['Ingresos que recibes al mes, después de impuestos y descuentos. Usa la misma moneda que en los demás campos.','Your monthly take-home income after taxes and deductions. Use the same currency for all fields.'],
  essential:['Gastos esenciales del mes, como vivienda, alimentos y servicios básicos. No los repitas en gastos fijos o variables.','Essential monthly expenses such as housing, food and utilities. Do not repeat them under fixed or variable expenses.'],
  fixed:['Otros gastos que suelen ser iguales cada mes y que no incluiste como esenciales.','Other expenses that are usually the same each month and are not already included as essential.'],

@@ -16,6 +16,9 @@ class FakeServer {
     this.offline = false;
     this.calls = [];
     this.functionDeployed = true;
+    this.plans = new Map(); // uid -> debt_plans row (RLS: own row only)
+    this.trm = { status: 200, body: { fecha: "2026-11-15", valor: 4000, fuente: "Superintendencia Financiera de Colombia", desactualizada: false } };
+    this.trmCalls = 0;
     this.seq = 0;
   }
   addUser(email, password) {
@@ -191,6 +194,62 @@ function createFakeLib(server, win) {
         }
         if (name === "mpdd_delete_my_data") return { data: server.deleteAll(uid), error: null, status: 200 };
         return { data: null, error: { code: "PGRST202", message: "not found" }, status: 404 };
+      },
+      from(table) {
+        const uid = () => (getSession() ? getSession().user.id : null);
+        const q = { table, filter: null, op: "select", row: null };
+        const done = (result) => Promise.resolve(result);
+        const b = {
+          select() {
+            return b;
+          },
+          eq(col, v) {
+            q.filter = [col, v];
+            return b;
+          },
+          upsert(row) {
+            q.op = "upsert";
+            q.row = row;
+            return b;
+          },
+          delete() {
+            q.op = "delete";
+            return b;
+          },
+          run() {
+            server.calls.push(["table", table, q.op]);
+            if (server.offline) return { data: null, error: { message: "Failed to fetch" } };
+            if (table !== "debt_plans") return { data: null, error: { code: "42P01", message: "no table" } };
+            const me = uid();
+            if (!me) return { data: null, error: { code: "42501", message: "rls" } };
+            if (q.op === "upsert") {
+              if (q.row.user_id !== me) return { data: null, error: { code: "42501", message: "new row violates row-level security" } };
+              const r = q.row;
+              const okCur = (c) => c === "USD" || c === "COP";
+              if (!okCur(r.income_currency) || !okCur(r.plan_currency) || !["avalanche", "snowball"].includes(r.method) || (r.fx_rate === null) !== (r.fx_type === null) || (r.fx_type !== null && !["oficial", "personalizada"].includes(r.fx_type)) || !(r.income >= 0) || !(r.extra >= 0)) return { data: null, error: { code: "23514", message: "check violation" } };
+              const prev = server.plans.get(me);
+              const row = Object.assign({}, r, { created_at: prev ? prev.created_at : new Date().toISOString(), updated_at: new Date().toISOString() });
+              server.plans.set(me, JSON.parse(JSON.stringify(row)));
+              return { data: JSON.parse(JSON.stringify(row)), error: null };
+            }
+            if (q.op === "delete") {
+              if (q.filter && q.filter[1] === me) server.plans.delete(me);
+              return { data: null, error: null };
+            }
+            const row = q.filter && q.filter[1] === me ? server.plans.get(me) : null;
+            return { data: row ? JSON.parse(JSON.stringify(row)) : null, error: null };
+          },
+          maybeSingle() {
+            return done(b.run());
+          },
+          single() {
+            return done(b.run());
+          },
+          then(res, rej) {
+            return done(b.run()).then(res, rej);
+          },
+        };
+        return b;
       },
       functions: {
         async invoke(name, o) {

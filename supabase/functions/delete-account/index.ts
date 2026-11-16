@@ -67,7 +67,7 @@ Deno.serve(async (req) => {
   const uid = userData.user.id;
 
   // Explicit cleanup first (cascade would also remove these rows).
-  for (const table of ["payments", "debts", "user_settings"]) {
+  for (const table of ["payments", "debts", "user_settings", "debt_plans"]) {
     const { error } = await admin.from(table).delete().eq("user_id", uid);
     if (error) return json({ error: "cleanup_failed" }, 500, origin);
   }

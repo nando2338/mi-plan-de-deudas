@@ -818,6 +818,11 @@
       if (running) await running;
     } catch (_) {}
     try {
+      // The plan lives in its own table (1.3): remove it first (own row via RLS).
+      try {
+        const c = await getClient();
+        await c.from("debt_plans").delete().eq("user_id", status.userId);
+      } catch (_) {}
       await rpc("mpdd_delete_my_data");
     } catch (e) {
       deleting = false;
@@ -833,6 +838,81 @@
       ls.removeItem(STATE_KEY);
     } catch (_) {}
     return { ok: true, dataDeleted: true, accountDeleted };
+  };
+  /* ---------------- plan (1.3) ---------------- */
+  // TRM: always through the "trm" Edge Function (never the open-data API directly).
+  // It is public data, so it works without a session; only the publishable key is sent.
+  const TRM_CACHE = "mpdd-trm-cache-v1";
+  let trmMemo = null;
+  api.fetchTRM = async ({ force = false } = {}) => {
+    if (status.config !== "ok") return { ok: false, error: "config" };
+    if (!force && trmMemo && Date.now() - trmMemo.at < 10 * 60 * 1000) return trmMemo.value;
+    const cached = () => {
+      try {
+        const c = JSON.parse(ls.getItem(TRM_CACHE) || "null");
+        if (c && typeof c.valor === "number" && c.valor >= 100 && c.valor <= 100000 && /^\d{4}-\d{2}-\d{2}$/.test(c.fecha)) return { ok: true, valor: c.valor, fecha: c.fecha, fuente: String(c.fuente || ""), desactualizada: true };
+      } catch (_) {}
+      return { ok: false, error: "network" };
+    };
+    if (navigator.onLine === false) return cached();
+    try {
+      const ctrl = typeof AbortController === "function" ? new AbortController() : null;
+      const timer = ctrl ? setTimeout(() => ctrl.abort(), 12000) : null;
+      const res = await fetch(String(CFG.supabaseUrl).replace(/\/$/, "") + "/functions/v1/trm", { headers: { apikey: CFG.supabaseKey }, cache: "no-store", signal: ctrl ? ctrl.signal : undefined });
+      if (timer) clearTimeout(timer);
+      if (!res.ok) return cached();
+      const d = await res.json();
+      const valor = Number(d && d.valor);
+      if (!(valor >= 100 && valor <= 100000) || !/^\d{4}-\d{2}-\d{2}$/.test(String(d.fecha))) return cached();
+      const value = { ok: true, valor, fecha: d.fecha, fuente: String(d.fuente || ""), desactualizada: !!d.desactualizada };
+      trmMemo = { at: Date.now(), value };
+      try {
+        ls.setItem(TRM_CACHE, JSON.stringify({ valor, fecha: d.fecha, fuente: value.fuente }));
+      } catch (_) {}
+      return value;
+    } catch (_) {
+      return cached();
+    }
+  };
+  // Saved plan: Supabase table debt_plans (RLS: own row only). Requires a session.
+  const PLAN_CACHE = "mpdd-cloud-plan-v1";
+  api.loadPlan = async () => {
+    if (!status.userId) return { ok: false, error: "notSignedIn" };
+    try {
+      const c = await getClient();
+      const { data, error } = await c.from("debt_plans").select("*").eq("user_id", status.userId).maybeSingle();
+      if (error) throw error;
+      try {
+        if (data) ls.setItem(PLAN_CACHE, JSON.stringify({ userId: status.userId, plan: data }));
+        else ls.removeItem(PLAN_CACHE);
+      } catch (_) {}
+      return { ok: true, plan: data || null };
+    } catch (_) {
+      return { ok: false, error: navigator.onLine === false ? "network" : "server", plan: api.cachedPlan() };
+    }
+  };
+  api.cachedPlan = () => {
+    try {
+      const c = JSON.parse(ls.getItem(PLAN_CACHE) || "null");
+      return c && c.userId === status.userId && status.userId ? c.plan : null;
+    } catch (_) {
+      return null;
+    }
+  };
+  api.savePlan = async (row) => {
+    if (!status.userId) return { ok: false, error: "notSignedIn" };
+    if (navigator.onLine === false) return { ok: false, error: "network" };
+    try {
+      const c = await getClient();
+      const { data, error } = await c.from("debt_plans").upsert(Object.assign({}, row, { user_id: status.userId }), { onConflict: "user_id" }).select().single();
+      if (error) return { ok: false, error: /check|violat|invalid/i.test(String(error.message || error.code)) ? "badData" : "server" };
+      try {
+        ls.setItem(PLAN_CACHE, JSON.stringify({ userId: status.userId, plan: data }));
+      } catch (_) {}
+      return { ok: true, plan: data };
+    } catch (_) {
+      return { ok: false, error: "network" };
+    }
   };
   api.syncNow = () => {
     if (!status.userId) return Promise.resolve();

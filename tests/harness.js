@@ -61,6 +61,13 @@ function load(options = {}) {
       for (const [k, v] of Object.entries(options.storage || {})) win.localStorage.setItem(k, v);
       win.fetch = (...a) => {
         net.fetch.push(String(a[0]));
+        // Only the "trm" Edge Function is simulated (served by the fake server).
+        if (options.server && /\/functions\/v1\/trm$/.test(String(a[0]))) {
+          options.server.trmCalls++;
+          const t = options.server.trm;
+          if (t.status === 0) return Promise.reject(new TypeError("Failed to fetch"));
+          return Promise.resolve({ ok: t.status >= 200 && t.status < 300, status: t.status, json: async () => JSON.parse(JSON.stringify(t.body)) });
+        }
         return Promise.reject(new TypeError("network disabled in tests"));
       };
       win.XMLHttpRequest = function () {

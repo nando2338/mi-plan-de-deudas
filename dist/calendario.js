@@ -35,6 +35,7 @@
     chip_late: "Pagado tarde",
     chip_paid: "Pagado",
     chip_pending: "Pendiente",
+    inPlan: "Según tu plan",
   };
   window.MPDDStrings = Object.assign(window.MPDDStrings || {}, { calendario: T });
 
@@ -120,7 +121,8 @@
     const list = appDebts();
     const { y, m } = ym;
     // Summary
-    const sum = S.monthSummary(list, y, m, t);
+    const planned = window.MPDDPlan ? window.MPDDPlan.planned() : {};
+    const sum = S.monthSummary(list, y, m, t, planned);
     summary.replaceChildren();
     const a = el("div", "cal-sum");
     a.append(el("div", "label", T.toPay), Object.keys(sum.toPay).length ? moneyLines(sum.toPay) : el("div", "money-line muted", T.nothingToPay));
@@ -140,7 +142,7 @@
     // Grid
     const from = y + "-" + String(m).padStart(2, "0") + "-01",
       to = S.monthEnd(y, m);
-    const inst = S.installments(list, { from, to, today: t });
+    const inst = S.installments(list, { from, to, today: t, planned });
     const pays = S.payments(list, { from, to });
     grid.replaceChildren();
     const wd = new Intl.DateTimeFormat(locale(), { weekday: "short", timeZone: "UTC" });
@@ -184,6 +186,7 @@
       body.append(raw("strong", it.name));
       const amt = it.payment ? formatMoney(it.payment.amount, it.currency) : it.expected !== null ? formatMoney(it.expected, it.currency) : null;
       if (amt) body.append(raw("span", amt, "pay-amount"));
+      if (!it.payment && it.planned) body.append(el("span", "plan-chip", T.inPlan));
       else body.append(el("span", "pay-amount muted", T.noAmount));
       const meta = el("span", "label");
       meta.append(el("span", "", T.due), " ", raw("span", it.dueDate));
@@ -271,6 +274,7 @@
   document.addEventListener("mpdd:rendered", safeRender);
   document.addEventListener("deudas:languagechange", safeRender);
   document.addEventListener("mpdd:avisoschange", updateBadge);
+  document.addEventListener("mpdd:planchange", safeRender);
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") safeRender();
   });

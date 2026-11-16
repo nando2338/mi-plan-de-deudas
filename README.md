@@ -73,6 +73,21 @@ La función está en `supabase/functions/delete-account/index.ts` y **no se ha d
 9. **Publicar.** Sube `dist/` como siempre. Si cambias `config.js` después, no hace falta cambiar la versión del service worker: ese archivo se pide primero a la red.
 10. **Legal.** Completa los marcadores resaltados de `privacidad.html` y `terminos.html` (responsable, identificación, correo, región, retención) y haz que un abogado revise ambos textos antes de abrir las cuentas al público.
 
+## Versión 1.3
+
+- **Nueva pestaña Plan** (reemplaza "Capacidad mensual", que se eliminó junto con "Comparar escenario"; el comparador "Comparar estrategias" de Métodos se mantiene). Sin plan muestra "Arma tu plan en 2 minutos" con "Empezar"; con plan muestra el plan del mes y "Ajustar mi plan", que abre el asistente con los datos llenos.
+- **Asistente de 5 pasos** a pantalla completa (oculta la barra de pestañas), con "Paso X de 5" y "Atrás": 1) ingresos y su moneda, y la moneda del plan solo si hay dos monedas; 2) gastos básicos con total automático; 3) pagos mínimos tomados de las deudas (pide en la fila la tasa o el mínimo que falten y los guarda en la deuda); 4) dinero libre con barra para el extra, fecha libre de deudas con y sin extra, intereses ahorrados y lo que queda para imprevistos (mensaje amable si es negativo); 5) "Tu plan para [mes]": avalancha por defecto ("PAGA PRIMERO" / "PAGA SOLO EL MÍNIMO"), cada pago en su moneda con su equivalente aproximado, totales por moneda, "Empezar mi plan" y "Probar método bola de nieve".
+- **Cálculo** (`dist/plan-core.js`): mes a mes, interés mensual = tasa anual / 12, mínimo de cada deuda y el resto a la prioritaria; cuando una deuda se paga, su pago pasa a la siguiente. Con dos monedas se convierte a la moneda del plan con la tasa usada, constante durante la simulación, y se devuelve a la moneda original con la misma tasa.
+- **TRM** solo dentro del Plan, siempre a través de la función de servidor `trm` (`supabase/functions/trm`), que lee la tabla `exchange_rates`, consulta datos.gov.co si falta la de hoy, la guarda y, si la API falla, devuelve la última con la marca "desactualizada". Tarjeta "TRM de hoy…", "Última TRM disponible…" o "Tasa personalizada", botón "Usar otra tasa" y aviso de que los valores son aproximados. Si la TRM oficial cambió más de 3 % frente a la usada, la pestaña Plan ofrece "Actualizar". Los totales de Inicio nunca se convierten.
+- **Guardado** en Supabase, tabla `debt_plans` (un plan por usuario, RLS). Sin cuenta se puede armar y ver el plan; al tocar "Empezar mi plan" se pide crear cuenta o iniciar sesión. Al guardar, los pagos del mes aparecen en el calendario con el monto del plan y se crean recordatorios de pago para las deudas con día de vencimiento.
+- **Supabase:** respaldo `supabase/respaldo-v1.2.sql`; migración `supabase/migrations/20261116000000_v1_3_plan_trm.sql` (solo agrega `exchange_rates` y `debt_plans`). La función `trm` está desplegada con `verify_jwt = false` porque la TRM es pública; no lee ni devuelve datos de usuarios.
+
+### Volver a la 1.2
+
+- **Lo más rápido:** Netlify → *Deploys* → despliegue anterior → *Publish deploy*.
+- **Desde GitHub:** Netlify → *Production branch* = `respaldo-v1.2` → *Save* → *Trigger deploy*.
+- **Supabase:** la 1.2 no usa las tablas nuevas ni la función `trm`; no hace falta deshacer nada. Si se quiere, los comandos están al final de la migración 1.3, y la función se puede borrar en *Edge Functions → trm → Delete*.
+
 ## Versión 1.2
 
 Novedades (sin anuncios, con el mismo diseño para celular y computador):
@@ -111,7 +126,7 @@ Requisitos: Node.js 20 o superior.
 ```bash
 cd tests
 npm install        # instala jsdom (solo para pruebas)
-npm test           # 48 pruebas automatizadas con DOM simulado
+npm test           # 63 pruebas automatizadas con DOM simulado
 npm run check      # node --check en todos los JS + recursos de HTML, service worker y manifiesto
 ```
 

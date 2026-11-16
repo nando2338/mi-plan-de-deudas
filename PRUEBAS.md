@@ -1,5 +1,37 @@
 # Comprobaciones
 
+## Versión 1.3 (rama `version-1.3`, 16 de noviembre de 2026)
+
+Ejecutar: `cd tests && npm test` (63 pruebas) y `npm run check`. Función `trm`: `cd tests/trm && deno run --allow-env --import-map=map.json trm.deno.ts`.
+
+`tests/plan-1-3.test.js` (15 pruebas). **Aprobado:**
+- Fecha libre de deudas e intereses ahorrados, contra un cálculo de referencia independiente; traspaso del pago cuando una deuda se termina.
+- Avalancha frente a bola de nieve (prioridad, montos del mes, intereses); bola de nieve compara saldos convertidos.
+- Dinero libre negativo: mensaje amable y sin barra.
+- Todo en una moneda: sin pregunta de moneda del plan, sin TRM, sin "aproximado" y sin ninguna solicitud de red.
+- Deudas en USD y COP con plan en COP y con plan en USD: pagos en su moneda con "≈", totales por moneda y total aproximado; Inicio sigue sin convertir.
+- Ingresos en COP y deudas solo en USD.
+- Falla de la TRM: "Última TRM disponible" con la última guardada (servidor) y con la última recibida (sin conexión).
+- Tasa personalizada: tarjeta "Tasa personalizada" y guardado `fx_type = personalizada`.
+- Guardar con cuenta: fila en `debt_plans` con todos los campos, pestaña Plan con "Ajustar mi plan" (datos llenos), calendario con el monto del plan, recordatorio creado y plan visible en otro dispositivo.
+- Sin cuenta: se arma el plan; al guardar pide iniciar sesión y no guarda nada en el dispositivo ni carga Supabase.
+- Tasa o mínimo faltantes se piden en la fila y se guardan; sin deudas, mensaje y botón para agregar.
+- Cambio de TRM mayor a 3 %: aviso y actualización del plan.
+- "Capacidad mensual" eliminada; el comparador de Métodos sigue; textos en inglés; caché `mpd-cache-v1.3`.
+
+`tests/trm/trm.deno.ts` (Deno, sin red). **Aprobado:** API disponible (consulta datos.gov.co, guarda y devuelve), TRM de hoy ya guardada, API caída (última guardada con `desactualizada: true`), sin datos (503), métodos no permitidos.
+
+### Supabase (proyecto `mi-plan-de-deudas-dev`)
+- `supabase/respaldo-v1.2.sql` verificado contra el catálogo antes de cambiar nada.
+- Migración `v1_3_plan_trm` aplicada y función `trm` desplegada, con confirmación del dueño.
+- Prueba de RLS en transacción revertida: los usuarios leen la TRM pero no pueden escribirla; cada usuario ve, cambia y borra solo su plan; las restricciones rechazan monedas inválidas; el rol anónimo no lee ninguna de las dos tablas.
+- `get_advisors`: sin avisos nuevos.
+
+### No probado
+- La función `trm` contra datos.gov.co real: este entorno no puede conectarse a Supabase ni a datos.gov.co. Se probó con Deno simulando la API y la tabla. La primera vez que alguien abra el asistente con dos monedas, la función consultará la API real; revisa *Edge Functions → trm → Logs*.
+- Navegadores y teléfonos reales.
+
+
 ## Versión 1.2 (rama `version-1.2`, 15 de noviembre de 2026)
 
 Ejecutar: `cd tests && npm install && npm test` (48 pruebas) y `npm run check`.
