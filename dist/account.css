@@ -17,3 +17,19 @@
 .account-dialog .modalbuttons button{border:0;padding:10px 15px;border-radius:9px;font-weight:700}
 .legal-links a{color:#426b52}#sync-notices ul{margin:0 0 6px;padding-left:18px}
 #account-root button:disabled,.account-dialog button:disabled{opacity:.55;cursor:not-allowed}
+/* 1.4: header account icon + menu, Inicio card, sign-in dialog */
+.account-header{position:relative;flex:none;display:flex;align-items:center}.account-header[hidden]{display:none}
+.account-enter{min-height:40px;padding:0 14px;border:1px solid #ffffff55;border-radius:999px;background:transparent;color:#fff;font-size:13px;font-weight:700;white-space:nowrap}
+.account-enter:hover{background:#ffffff14}
+.account-avatar{width:40px;height:40px;border-radius:50%;border:2px solid #ffffff33;background:#bce49c;color:#133c2d;font-size:16px;font-weight:800;display:grid;place-items:center;padding:0}
+.account-enter:focus-visible,.account-avatar:focus-visible{outline:2px solid #d6edb2;outline-offset:2px}
+.account-enter[hidden],.account-avatar[hidden],.account-menu[hidden],.account-home-card[hidden]{display:none}
+.account-menu{position:absolute;z-index:60;right:0;top:calc(100% + 8px);min-width:220px;max-width:calc(100vw - 24px);background:#fff;color:var(--ink);border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 40px #0b1f1d33;padding:8px}
+.account-menu-email{margin:4px 8px 8px;font-size:13px;color:var(--muted);overflow-wrap:anywhere}
+.account-menu-item{display:block;width:100%;text-align:left;background:transparent;border:0;border-radius:8px;padding:10px 8px;min-height:44px;color:var(--ink);font-weight:650}
+.account-menu-item:hover,.account-menu-item:focus-visible{background:#edf3e8;outline:none}
+.account-home-card p{margin:0 0 8px;color:var(--ink);font-weight:650}.account-home-card .actions{flex-wrap:wrap}
+.account-home-card .save,#account-root .account-panel-enter{border:0;padding:10px 15px;border-radius:9px;font-weight:700;background:#176849;color:#fff}
+.account-auth h2{margin-top:0}
+@media(max-width:560px){.account-header{order:2}}
+@media(max-width:400px){.brand{font-size:11px;letter-spacing:.02em;white-space:nowrap}.brand i{width:30px;height:30px;margin-right:6px}.top{gap:4px 8px}.top .language-control select{min-width:0}.account-enter{padding:0 10px}}

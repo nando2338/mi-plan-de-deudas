@@ -131,6 +131,17 @@
     backupCloudNote: "Con sesión iniciada, restaurar un respaldo también reemplaza los datos de tu cuenta en la nube.",
     noticeLocal: "Tus registros se guardan solo en este navegador y dispositivo. Descarga un respaldo con frecuencia para conservarlos o trasladarlos a otro dispositivo.",
     noticeCloud: "Tus registros se guardan en este dispositivo y se sincronizan con tu cuenta en la nube. Si no hay conexión, los cambios esperan aquí y se envían al volver. Aun así, descarga un respaldo de vez en cuando.",
+    // 1.4
+    authTitle: "Entra a tu cuenta",
+    close: "Cerrar",
+    menuLabel: "Menú de cuenta",
+    myAccount: "Mi cuenta",
+    homeCard: "Crea tu cuenta gratis para no perder tus deudas si cambias de teléfono",
+    notNow: "Ahora no",
+    ask_plan: "Crea tu cuenta para guardar tu plan",
+    ask_notifications: "Crea tu cuenta para recibir avisos en todos tus dispositivos",
+    ask_thirdDebt: "Ya tienes 3 deudas. Crea tu cuenta gratis para no perderlas",
+    changePassword: "Cambiar contraseña",
   };
   window.MPDDAccountStrings = T;
 
@@ -187,7 +198,57 @@
   let view = null; // "disabled" | "signedOut" | "recovery" | "signedIn"
   let tab = "login";
 
+  /* ---------- sign-in / create-account dialog (1.4) ---------- */
+  const authDialog = el("dialog", { id: "account-auth-dialog", class: "account-dialog account-auth", "aria-labelledby": "account-auth-title" });
+  const authTitle = el("h2", { id: "account-auth-title" });
+  const authDetail = el("p", { class: "account-msg", role: "status", "aria-live": "polite" });
+  const authBody = el("div", { class: "account-auth-body" });
+  const [apl, atl] = legalLinks(true);
+  authDialog.append(
+    el(
+      "div",
+      { class: "modal" },
+      authTitle,
+      el("p", { class: "label", text: T.intro }),
+      authDetail,
+      authBody,
+      el("p", { class: "label legal-links" }, apl, " · ", atl),
+      el("div", { class: "modalbuttons" }, btn(T.close, () => closeAuth(), "cancel")),
+    ),
+  );
+  document.body.append(authDialog);
+  let authReason = null;
+  authDialog.addEventListener("close", () => {
+    // Never keep typed passwords around once the dialog is closed.
+    authBody.replaceChildren();
+    authReason = null;
+  });
+  function openAuth(opts = {}) {
+    authReason = opts.reason || null;
+    if (opts.tab) tab = opts.tab;
+    authTitle.textContent = authReason ? T["ask_" + authReason] : T.authTitle;
+    const ek = errorKey(Cloud.status());
+    if (ek) say(authDetail, ek, true);
+    else authDetail.textContent = "";
+    renderSignedOut();
+    if (!authDialog.open) {
+      if (typeof authDialog.showModal === "function") authDialog.showModal();
+      else authDialog.setAttribute("open", "");
+    }
+    const first = authBody.querySelector("input");
+    if (first && first.focus) first.focus();
+  }
+  function closeAuth() {
+    if (!authDialog.open) return;
+    if (typeof authDialog.close === "function") authDialog.close();
+    else {
+      authDialog.removeAttribute("open");
+      authDialog.dispatchEvent(new Event("close"));
+    }
+  }
+
   function renderSignedOut() {
+    const body = authBody;
     body.replaceChildren();
     const tabs = el("div", { class: "switch account-tabs", role: "tablist" });
     const tLogin = btn(T.tabLogin, () => ((tab = "login"), renderSignedOut()), tab === "login" ? "active" : "");
@@ -274,6 +335,10 @@
     }
     return el("div", { class: "actions" }, b);
   }
+  // Más → Cuenta without a session: sign-in lives behind the header icon and the dialog.
+  function renderPanelSignedOut() {
+    body.replaceChildren(el("div", { class: "actions" }, btn(T.enter, () => openAuth({ tab: "login" }), "save account-panel-enter")));
+  }
   function renderRecovery() {
     body.replaceChildren();
     const form = el("form", { class: "account-form", novalidate: true });
@@ -308,7 +373,7 @@
       const chooseRow = el("div", { class: "actions", hidden: true }, choose);
       const syncBtn = btn(T.syncNow, () => Cloud.syncNow());
       const preBtn = btn(T.downloadPre, downloadPre);
-      const actions = el("div", { class: "actions account-actions" }, syncBtn, btn(T.signOut, () => openSignOut()), preBtn);
+      const actions = el("div", { class: "actions account-actions" }, syncBtn, btn(T.changePassword, () => openChangePassword()), btn(T.signOut, () => openSignOut()), preBtn);
       const danger = el("div", { class: "actions" }, btn(T.deleteAccount, () => openDelete(), "ghost danger"));
       const pre = el("div", { class: "account-pre" });
       body.append(el("p", {}, el("span", { text: T.signedInAs }), " ", who), el("p", { class: "label" }, el("span", { text: T.pending }), " ", pendingN), lastLine, chooseRow, unsync, actions, pre, danger);
@@ -428,6 +493,28 @@
   function openSignOut() {
     openDialog([el("h2", { text: T.o_title }), ...localChoice(null, T.o_text), el("div", { class: "modalbuttons" }, btn(T.cancel, closeDialog, "cancel"))]);
   }
+  function openChangePassword() {
+    const form = el("form", { class: "account-form", novalidate: true });
+    const pass = input("acc-change-password", T.passwordRecovery, "password", { autocomplete: "new-password", minlength: "8" });
+    const pass2 = input("acc-change-password2", T.passwordRepeat, "password", { autocomplete: "new-password", minlength: "8" });
+    const msg = message();
+    form.append(pass.wrap, pass2.wrap, el("div", { class: "modalbuttons" }, btn(T.cancel, closeDialog, "cancel"), btn(T.saveNewPassword, null, "save", "submit")), msg);
+    form.onsubmit = async (e) => {
+      e.preventDefault();
+      if (pass.input.value.length < 8) return say(msg, "m_passwordLength", true);
+      if (pass.input.value !== pass2.input.value) return say(msg, "m_mismatch", true);
+      busy(form, true);
+      say(msg, "m_working");
+      const r = await Cloud.updatePassword(pass.input.value);
+      busy(form, false);
+      pass.input.value = pass2.input.value = "";
+      if (r.ok) {
+        closeDialog();
+        say(detail, "m_passwordUpdated");
+      } else say(msg, resultKey(r), true);
+    };
+    openDialog([el("h2", { text: T.changePassword }), form]);
+  }
   function openDelete() {
     openDialog([
       el("h2", { text: T.d_title }),
@@ -500,8 +587,167 @@
     return T[k] ? k : "e_generic";
   }
 
+  /* ---------- 1.4: header account icon + menu ---------- */
+  const JOURNAL = "nando-restore-journal-v1",
+    PROMPTS = "mpdd-account-prompts-v1",
+    WEEK = 7 * 24 * 60 * 60 * 1000;
+  const memorySnooze = {}; // used when localStorage cannot be written (pending restore, full storage)
+  function prompts() {
+    try {
+      const v = JSON.parse(localStorage.getItem(PROMPTS) || "{}");
+      return v && typeof v === "object" && !Array.isArray(v) ? v : {};
+    } catch (_) {
+      return {};
+    }
+  }
+  function snooze(key) {
+    memorySnooze[key] = Date.now();
+    try {
+      if (localStorage.getItem(JOURNAL) !== null) return false;
+      const p = prompts();
+      p[key] = Date.now();
+      localStorage.setItem(PROMPTS, JSON.stringify(p));
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+  function snoozed(key) {
+    const now = Date.now();
+    for (const t of [Number(prompts()[key]), Number(memorySnooze[key])]) if (t > 0 && t <= now + 60000 && now - t < WEEK) return true;
+    return false;
+  }
+  const accountsOn = () => Cloud.status().state !== "disabled";
+  // Only a confirmed "no session" state: not while a stored session is still loading.
+  const signedOutForSure = () => !Cloud.status().userId && Cloud.status().state === "signedOut";
+
+  const headerBox = el("div", { class: "account-header", hidden: true });
+  const enterBtn = btn(T.enter, () => openAuth({ tab: "login" }), "account-enter");
+  const initial = el("span", { class: "account-initial", "aria-hidden": "true", "data-localized-output": "true" });
+  const avatar = el("button", { type: "button", class: "account-avatar", id: "account-avatar", "aria-expanded": "false", "aria-controls": "account-menu" }, initial, el("span", { class: "visually-hidden", text: T.menuLabel }));
+  const menuEmail = el("span", { "data-localized-output": "true" });
+  const menu = el(
+    "div",
+    { class: "account-menu", id: "account-menu", hidden: true },
+    el("p", { class: "account-menu-email" }, menuEmail),
+    btn(T.myAccount, () => {
+      closeMenu(false);
+      goToAccount();
+    }, "account-menu-item"),
+    btn(T.signOut, () => {
+      closeMenu(false);
+      openSignOut();
+    }, "account-menu-item"),
+  );
+  headerBox.append(enterBtn, avatar, menu);
+  const top = document.querySelector("header .top");
+  if (top) top.append(headerBox);
+  function openMenu() {
+    menu.hidden = false;
+    avatar.setAttribute("aria-expanded", "true");
+    const first = menu.querySelector("button");
+    if (first && first.focus) first.focus();
+  }
+  function closeMenu(focusBack) {
+    if (menu.hidden) return;
+    menu.hidden = true;
+    avatar.setAttribute("aria-expanded", "false");
+    if (focusBack && avatar.focus) avatar.focus();
+  }
+  avatar.addEventListener("click", () => (menu.hidden ? openMenu() : closeMenu(false)));
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !menu.hidden) {
+      e.preventDefault();
+      closeMenu(true);
+    }
+  });
+  document.addEventListener("click", (e) => {
+    if (!menu.hidden && !headerBox.contains(e.target)) closeMenu(false);
+  });
+  function goToAccount() {
+    if (window.MPDDNavigate) window.MPDDNavigate("more");
+    const a = document.getElementById("account-title");
+    if (!a) return;
+    if (a.scrollIntoView) a.scrollIntoView({ block: "start" });
+    a.setAttribute("tabindex", "-1");
+    if (a.focus) a.focus();
+  }
+  function renderHeader(s) {
+    const signedIn = !!s.userId;
+    headerBox.hidden = s.state === "disabled" || (!signedIn && s.state !== "signedOut");
+    enterBtn.hidden = signedIn;
+    avatar.hidden = !signedIn;
+    if (!signedIn) closeMenu(false);
+    const email = s.email || "";
+    setText(initial, email ? email.trim().charAt(0).toUpperCase() : "•");
+    setText(menuEmail, email);
+  }
+
+  /* ---------- 1.4: Inicio card for users without an account ---------- */
+  const homeCard = el(
+    "section",
+    { class: "notice account-home-card", id: "account-home-card", hidden: true },
+    el("p", { text: T.homeCard }),
+    el(
+      "div",
+      { class: "actions" },
+      btn(T.createBtn, () => openAuth({ tab: "signup" }), "save"),
+      btn(T.notNow, () => {
+        snooze("homeCard");
+        homeCard.hidden = true;
+      }),
+    ),
+  );
+  const home = document.getElementById("view-home");
+  const homeOverview = home && home.querySelector(":scope > .overview");
+  if (homeOverview) homeOverview.after(homeCard);
+  else if (home) home.prepend(homeCard);
+  function renderHomeCard() {
+    homeCard.hidden = !(accountsOn() && signedOutForSure() && !snoozed("homeCard"));
+  }
+
+  /* ---------- 1.4: ask for an account at important moments ---------- */
+  function ask(reason) {
+    if (!T["ask_" + reason]) return false;
+    if (!accountsOn() || !signedOutForSure()) return false;
+    if (reason === "thirdDebt") snooze("thirdDebt");
+    openAuth({ tab: "signup", reason });
+    return true;
+  }
+  function debtCount() {
+    try {
+      return window.MPDDApp && window.MPDDApp.debts ? window.MPDDApp.debts().length : 0;
+    } catch (_) {
+      return 0;
+    }
+  }
+  let lastCount = debtCount();
+  function afterDebtForm(fn) {
+    const form = document.getElementById("dialog");
+    if (form && form.open) form.addEventListener("close", () => setTimeout(fn, 0), { once: true });
+    else fn();
+  }
+  function checkThirdDebt() {
+    const n = debtCount(),
+      prev = lastCount;
+    lastCount = n;
+    // Only a single new debt (not a restore or a cloud download) that reaches 3 or more.
+    if (n !== prev + 1 || n < 3) return;
+    if (!accountsOn() || !signedOutForSure() || snoozed("thirdDebt")) return;
+    afterDebtForm(() => ask("thirdDebt"));
+  }
+  document.addEventListener("mpdd:localchange", () => setTimeout(checkThirdDebt, 0));
+  window.MPDDAccount = Object.freeze({ ask, open: (tabName) => (accountsOn() && signedOutForSure() ? (openAuth({ tab: tabName === "signup" ? "signup" : "login" }), true) : false) });
+
   Cloud.onChange((s) => {
     const signedIn = !!s.userId;
+    renderHeader(s);
+    renderHomeCard();
+    if (signedIn) closeAuth();
+    else if (authDialog.open) {
+      const ek = errorKey(s);
+      if (ek) say(authDetail, ek, true);
+    }
     setText(stateText, T["st_" + s.state] || T.st_signedOut);
     dot.dataset.state = s.state;
     // Signed out: leave the original header and notice untouched (identical to the no-account app).
@@ -524,7 +770,7 @@
       signedInParts = null;
       if (next === "disabled") {
         body.replaceChildren(el("p", { class: s.config === "placeholder" ? "label" : "error", text: s.config === "secret" ? T.secretKey : s.config === "placeholder" ? T.disabled : T.badConfig }));
-      } else if (next === "signedOut") renderSignedOut();
+      } else if (next === "signedOut") renderPanelSignedOut();
       else if (next === "recovery") renderRecovery();
     }
     if (view === "signedIn") renderSignedIn(s);

@@ -378,13 +378,19 @@
       const rs = settingsMap(pull);
       const remoteSettings = ["deudas-budget-v1", "nando-recordatorios-v1"].filter((k) => rs.get(k) && rs.get(k).value !== null).length;
       if (!local.length && !localSettings) return resolveLink("cloud", true);
+      const otherUser = !!(state && state.userId && state.userId !== status.userId);
+      // 1.4: new or empty account + data on this device: upload without asking.
+      // Nothing in the cloud is replaced, records are keyed by id (no duplicates),
+      // and a pre-sync copy is still stored. Data last used with ANOTHER account
+      // keeps the question so it is never uploaded to the wrong account silently.
+      if (!remoteDebts && !remoteSettings && !otherUser) return resolveLink("upload", false);
       status.choice = {
         kind: remoteDebts || remoteSettings ? "both" : "upload",
         localDebts: local.length,
         localSettings,
         remoteDebts,
         remoteSettings,
-        otherUser: !!(state && state.userId && state.userId !== status.userId),
+        otherUser,
       };
       setState("needsChoice");
     } catch (e) {

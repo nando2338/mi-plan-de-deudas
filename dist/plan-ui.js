@@ -802,6 +802,7 @@
         keepDraft(d);
         status.replaceChildren(el("span", "", T.needAccount), " ", btn(T.goAccount, "save", () => {
           closeWizard();
+          if (window.MPDDAccount && window.MPDDAccount.ask("plan")) return;
           if (window.MPDDNavigate) window.MPDDNavigate("more");
           const a = document.getElementById("account-title");
           if (a && a.scrollIntoView) a.scrollIntoView({ block: "start" });

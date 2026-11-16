@@ -53,9 +53,11 @@ test("configurada pero sin sesión: ninguna solicitud de red ni carga de supabas
   assert.deepEqual(h.net.fetch, []);
   assert.equal(server.calls.length, 0);
   assert.ok(!keysOf(h.win).some((k) => k.startsWith("mpdd-cloud") || k.startsWith("sb-")));
-  // Account panel offers optional sign-in, without blocking the app.
-  assert.ok(h.doc.getElementById("acc-login-email"));
+  // Optional sign-in behind the header icon, without blocking the app.
   assert.equal(h.doc.querySelector("dialog[open]"), null);
+  h.doc.querySelector(".account-header .account-enter").click();
+  assert.ok(h.doc.getElementById("acc-login-email"));
+  assert.equal(h.net.createClient, 0, "abrir el formulario no carga Supabase");
   h.close();
 });
 
@@ -72,24 +74,20 @@ test("sin internet al abrir con sesión: la app sigue local y no rompe", async (
   h.close();
 });
 
-test("subida inicial: pregunta y sube las deudas locales con sus pagos", async () => {
+test("subida inicial: con la nube vacía sube automáticamente las deudas locales con sus pagos", async () => {
   const server = new FakeServer();
   const uid = server.addUser("a@ejemplo.test", "contraseña1");
   const local = [debt("d1", "Tarjeta A", { history: [{ amount: 50, date: "2026-10-01" }] }), debt("d2", "Préstamo", { currency: "COP", balance: 1000000, initial: 1500000, due: "" })];
   const h = load({ config: "test", server, storage: Object.assign({}, ES, { "nando-deudas-v1": JSON.stringify(local), "deudas-budget-v1": JSON.stringify({ income: 10, essential: 1, fixed: 1, variable: 1, minimums: 1, extra: 1 }) }) });
   await sleep(50);
-  // Sign in through the UI.
+  // Sign in through the UI (header "Entrar" -> dialog).
+  h.doc.querySelector(".account-header .account-enter").click();
   h.doc.getElementById("acc-login-email").value = "a@ejemplo.test";
   h.doc.getElementById("acc-login-password").value = "contraseña1";
-  h.doc.querySelector("#account-root form").dispatchEvent(new h.win.Event("submit", { cancelable: true }));
-  await waitFor(() => h.win.MPDDCloud.status().state === "needsChoice", { label: "pregunta de subida" });
-  const dlg = h.doc.getElementById("account-dialog");
-  assert.ok(dlg.hasAttribute("open"));
-  assert.match(dlg.textContent, /Subir tus datos/);
-  assert.match(dlg.textContent, /2/);
-  assert.equal(server.rowsFor(uid).length, 0, "no sube nada antes de que el usuario elija");
-  [...dlg.querySelectorAll("button")].find((b) => b.textContent === "Subir mis datos").click();
+  h.doc.querySelector("#account-auth-dialog form").dispatchEvent(new h.win.Event("submit", { cancelable: true }));
+  // 1.4: empty cloud -> no "needsChoice" question, the upload starts by itself.
   await waitFor(() => h.win.MPDDCloud.status().state === "synced" && server.rowsFor(uid).length === 2, { label: "subida" });
+  assert.equal(h.doc.querySelector("dialog[open]"), null, "sin preguntas ni diálogos abiertos");
   const rows = server.rowsFor(uid);
   assert.equal(rows.find((r) => r.id === "d1").payments.length, 1);
   assert.equal(rows.find((r) => r.id === "d1").due, 15);
@@ -343,12 +341,13 @@ test("registro: casilla obligatoria sin marcar, contraseña de 8+ y mensajes que
   server.addUser("existe@ejemplo.test", "x12345678");
   const h = load({ config: "test", server, storage: ES });
   await sleep(50);
-  [...h.doc.querySelectorAll("#account-root button")].find((b) => b.textContent === "Crear cuenta").click();
+  h.doc.querySelector(".account-header .account-enter").click();
+  [...h.doc.querySelectorAll("#account-auth-dialog button")].find((b) => b.textContent === "Crear cuenta").click();
   const box = h.doc.getElementById("acc-accept");
   assert.equal(box.checked, false, "casilla sin marcar por defecto");
   assert.ok(h.doc.querySelector('.account-accept a[href="/privacidad.html"]'));
   assert.ok(h.doc.querySelector('.account-accept a[href="/terminos.html"]'));
-  const form = h.doc.querySelector("#account-root form");
+  const form = h.doc.querySelector("#account-auth-dialog form");
   const submit = async () => {
     form.dispatchEvent(new h.win.Event("submit", { cancelable: true }));
     await sleep(30);
@@ -375,13 +374,13 @@ test("registro: casilla obligatoria sin marcar, contraseña de 8+ y mensajes que
   const signUp = server.calls.find((c) => c[0] === "signUp");
   assert.ok(signUp[2].terms_accepted_at, "se registra la aceptación");
   // Magic link: same neutral message for unknown emails.
-  [...h.doc.querySelectorAll("#account-root button")].find((b) => b.textContent === "Iniciar sesión").click();
+  [...h.doc.querySelectorAll("#account-auth-dialog button")].find((b) => b.textContent === "Iniciar sesión").click();
   h.doc.getElementById("acc-login-email").value = "noexiste@ejemplo.test";
-  [...h.doc.querySelectorAll("#account-root button")].find((b) => b.textContent === "Enviarme un enlace mágico").click();
-  await waitFor(() => /Si hay una cuenta con ese correo/.test(h.doc.querySelector("#account-root .account-msg").textContent));
+  [...h.doc.querySelectorAll("#account-auth-dialog button")].find((b) => b.textContent === "Enviarme un enlace mágico").click();
+  await waitFor(() => /Si hay una cuenta con ese correo/.test(h.doc.querySelector("#account-auth-dialog form .account-msg").textContent));
   assert.equal(server.calls.find((c) => c[0] === "otp")[2].shouldCreateUser, false);
   // Google prepared but disabled.
-  const g = [...h.doc.querySelectorAll("#account-root button")].find((b) => /Google/.test(b.textContent));
+  const g = [...h.doc.querySelectorAll("#account-auth-dialog button")].find((b) => /Google/.test(b.textContent));
   assert.equal(g.disabled, true);
   h.close();
 });
