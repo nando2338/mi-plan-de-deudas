@@ -102,7 +102,7 @@
     saving: "Guardando tu plan…",
     saved: "¡Listo! Tu plan quedó guardado y tus pagos del mes están en el calendario.",
     saveError: "No se pudo guardar tu plan. Revisa tu conexión e inténtalo de nuevo.",
-    remindersOff: "Activa los avisos en Más → Recordatorios para que te recordemos cada pago.",
+    remindersOff: "Activa los avisos en Más → Notificaciones para que te recordemos cada pago.",
     planPaid: "Pagado",
     resume: "Continuar con tu plan",
     resumeText: "Tienes un plan sin guardar. Ya puedes guardarlo con tu cuenta.",

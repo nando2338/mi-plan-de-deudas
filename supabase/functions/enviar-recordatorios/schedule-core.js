@@ -149,14 +149,116 @@
     for (const p of payments(debts, { from, to })) addTo(paid, p.currency, p.amount);
     return { from, to, toPay, paid, unknown };
   }
-  /* Color de un día del calendario. */
+  /* Estado de un día del calendario (1.4): "late" (vencido sin pagar), "pending" (por pagar),
+     "paid" (pagado, a tiempo o tarde) o "none". "Hoy" ya no es un color: el calendario lo marca
+     aparte con un borde oscuro y conserva el estado del día. date/today se aceptan por compatibilidad. */
   function dayColor(date, today, dayInstallments, dayPayments) {
-    if (date === today) return "today";
-    const all = [...dayInstallments.map((i) => i.status), ...dayPayments.map((p) => p.status)];
-    if (all.some((s) => s === "overdue" || s === "late")) return "late";
-    if (all.some((s) => s === "onTime" || s === "paid")) return "paid";
+    const all = [...(dayInstallments || []).map((i) => i.status), ...(dayPayments || []).map((p) => p.status)];
+    if (all.some((s) => s === "overdue")) return "late";
     if (all.some((s) => s === "pending" || s === "dueToday")) return "pending";
+    if (all.some((s) => s === "onTime" || s === "paid" || s === "late")) return "paid";
     return "none";
+  }
+  function daysBetween(a, b) {
+    const [ay, am, ad] = a.split("-").map(Number);
+    const [by, bm, bd] = b.split("-").map(Number);
+    return Math.round((Date.UTC(by, bm - 1, bd) - Date.UTC(ay, am - 1, ad)) / 86400000);
+  }
+  /* Desde dónde se buscan cuotas vencidas sin pagar: inicio del mes anterior (igual que el contador). */
+  function overdueFrom(today) {
+    return monthStart(addDays(monthStart(today), -40));
+  }
+  /* "Próximos pagos" (1.4, reemplaza la pestaña Avisos): cuotas vencidas sin pagar y cuotas
+     sin pagar de los próximos daysAhead días. days < 0 = vencida hace -days días. */
+  function upcoming(debts, today, opts) {
+    const o = opts || {};
+    const ahead = Number.isInteger(o.daysAhead) && o.daysAhead >= 0 ? o.daysAhead : 30;
+    return installments(debts, { from: overdueFrom(today), to: addDays(today, ahead), today, planned: o.planned })
+      .filter((i) => !i.payment)
+      .map((i) => Object.assign({}, i, { days: daysBetween(today, i.dueDate) }));
+  }
+  /* Fechas de corte configuradas en los recordatorios (solo lectura), entre hoy y daysAhead. */
+  function cutoffs(debts, prefs, today, daysAhead) {
+    const out = [];
+    if (!prefs || typeof prefs !== "object") return out;
+    const to = addDays(today, Number.isInteger(daysAhead) ? daysAhead : 30);
+    for (const debt of debts || []) {
+      const p = Object.prototype.hasOwnProperty.call(prefs, String(debt.id)) ? prefs[String(debt.id)] : null;
+      if (!p || typeof p !== "object" || p.cutoffEnabled === false) continue;
+      const day = Number(p.cutoffDay);
+      if (!Number.isInteger(day) || day < 1 || day > 31) continue;
+      const [y, m] = today.split("-").map(Number);
+      for (let k = 0; k < 3; k++) {
+        const n = y * 12 + m - 1 + k;
+        const date = monthDue(Math.floor(n / 12), (n % 12) + 1, day);
+        if (date >= today && date <= to) out.push({ debtId: String(debt.id), name: String(debt.name || ""), currency: debt.currency, date, days: daysBetween(today, date) });
+      }
+    }
+    return out.sort((a, b) => a.date.localeCompare(b.date) || a.name.localeCompare(b.name));
+  }
+  function rateOf(debt) {
+    const n = Number(debt && debt.rate);
+    return debt && debt.rate !== "" && debt.rate !== null && debt.rate !== undefined && Number.isFinite(n) && n >= 0 ? n : null;
+  }
+  /* "Lo que debo" (1.4), una sola moneda; nunca convierte.
+     view "month": lo que falta pagar este mes (plan si existe, si no la cuota/mínimo).
+     view "total": el saldo de cada deuda. */
+  function owed(debts, { currency, view, today, planned }) {
+    const all = (debts || []).filter((d) => Number(d.balance) > 0 && (d.currency === "USD" || d.currency === "COP"));
+    const mine = all.filter((d) => d.currency === currency);
+    const others = {};
+    for (const d of all) if (d.currency !== currency) others[d.currency] = (others[d.currency] || 0) + 1;
+    const late = new Set(upcoming(mine, today, { daysAhead: 0 }).filter((i) => i.days < 0).map((i) => i.debtId));
+    const [y, m] = today.split("-").map(Number);
+    const ym = today.slice(0, 7);
+    const inst = installments(mine, { from: ym + "-01", to: monthEnd(y, m), today, planned });
+    let unknown = 0;
+    const items = [];
+    for (const d of mine) {
+      const id = String(d.id);
+      let amount = Number(d.balance);
+      if (view === "month") {
+        amount = null;
+        if (dueDay(d)) {
+          const it = inst.find((i) => i.debtId === id);
+          if (!it || it.payment) continue;
+          amount = it.expected;
+        } else {
+          const paidThisMonth = (Array.isArray(d.history) ? d.history : []).some((h) => h && validDate(h.date) && h.date.slice(0, 7) === ym);
+          if (paidThisMonth) continue;
+          const p = planned && Number(planned[id + "|" + ym]);
+          amount = p > 0 ? p : minPayment(d);
+        }
+        if (amount === null) {
+          unknown++;
+          continue;
+        }
+      }
+      items.push({ debtId: id, name: String(d.name || ""), currency, amount, balance: Number(d.balance), rate: rateOf(d), overdue: late.has(id) });
+    }
+    items.sort((a, b) => b.amount - a.amount || a.name.localeCompare(b.name));
+    const total = items.reduce((s, x) => s + x.amount, 0);
+    for (const it of items) it.share = total > 0 ? it.amount / total : 0;
+    // Tags and tip use every debt of the currency (same answer in both views).
+    const byBalance = mine.slice().sort((a, b) => Number(b.balance) - Number(a.balance) || String(a.name).localeCompare(String(b.name)));
+    const withRate = mine.filter((d) => rateOf(d) !== null && rateOf(d) > 0).sort((a, b) => rateOf(b) - rateOf(a) || Number(b.balance) - Number(a.balance) || String(a.name).localeCompare(String(b.name)));
+    const biggest = byBalance[0] || null;
+    const priciest = withRate[0] || null;
+    const smallest = byBalance[byBalance.length - 1] || null;
+    const several = mine.length >= 2;
+    return {
+      currency,
+      view: view === "month" ? "month" : "total",
+      items,
+      total: currency === "COP" ? Math.round(total) : Math.round(total * 100) / 100,
+      unknown,
+      count: mine.length,
+      others,
+      mostExpensiveId: several && priciest ? String(priciest.id) : null,
+      smallestId: several && smallest ? String(smallest.id) : null,
+      biggest: biggest ? { debtId: String(biggest.id), name: String(biggest.name || "") } : null,
+      priciest: priciest ? { debtId: String(priciest.id), name: String(priciest.name || ""), rate: rateOf(priciest) } : null,
+    };
   }
   /* Contador del ícono: cuotas vencidas sin pagar (últimos 2 meses) y próximas dentro de daysBefore días. */
   function badgeCount(debts, today, daysBefore) {
@@ -205,5 +307,5 @@
   function validAvisos(v) {
     return !!v && typeof v === "object" && (v.time === undefined || (typeof v.time === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(v.time))) && [1, 3, 7].includes(v.daysBefore);
   }
-  return { AVISOS_KEY, AVISOS_OPT, readAvisos, validAvisos, CATEGORIES, NO_CATEGORY, STATUS_LABEL, validDate, addDays, monthDue, monthEnd, dueDay, minPayment, categoryLabel, paymentStatus, installments, payments, monthSummary, dayColor, badgeCount, toCSV, csvCell };
+  return { AVISOS_KEY, AVISOS_OPT, readAvisos, validAvisos, CATEGORIES, NO_CATEGORY, STATUS_LABEL, validDate, addDays, monthDue, monthEnd, dueDay, minPayment, categoryLabel, paymentStatus, installments, payments, monthSummary, dayColor, daysBetween, overdueFrom, upcoming, cutoffs, owed, badgeCount, toCSV, csvCell };
 });

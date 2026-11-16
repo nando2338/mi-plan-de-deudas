@@ -313,7 +313,7 @@ const entries=[['Actualizado manualmente','Updated manually'],
 ,["Guardando tu plan…","Saving your plan…"]
 ,["¡Listo! Tu plan quedó guardado y tus pagos del mes están en el calendario.","Done! Your plan is saved and this month's payments are on your calendar."]
 ,["No se pudo guardar tu plan. Revisa tu conexión e inténtalo de nuevo.","Your plan could not be saved. Check your connection and try again."]
-,["Activa los avisos en Más → Recordatorios para que te recordemos cada pago.","Turn on alerts in More → Reminders so we remind you of each payment."]
+,["Activa los avisos en Más → Notificaciones para que te recordemos cada pago.","Turn on alerts in More → Notifications so we remind you of each payment."]
 ,["Según tu plan","Per your plan"]
 ,["Tu plan de pagos","Your payment plan"]
 ,["Un asistente de 5 pasos calcula cuánto te queda libre cada mes después de lo básico y los mínimos, y te dice a qué deuda ponerle el extra.","A 5-step assistant works out what is left each month after basics and minimums, and tells you which debt gets the extra."]

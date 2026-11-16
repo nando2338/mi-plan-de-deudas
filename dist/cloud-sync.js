@@ -831,6 +831,11 @@
       try {
         ls.removeItem(PLAN_CACHE);
       } catch (_) {}
+      // 1.4: notification devices and settings (own rows via RLS).
+      for (const table of ["push_subscriptions", "push_settings"]) {
+        const r = await c.from(table).delete().eq("user_id", status.userId);
+        if (r && r.error) throw codeError(navigator.onLine === false ? "network" : "server");
+      }
       await rpc("mpdd_delete_my_data");
     } catch (e) {
       deleting = false;

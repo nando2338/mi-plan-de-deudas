@@ -67,9 +67,10 @@ Deno.serve(async (req) => {
   const uid = userData.user.id;
 
   // Explicit cleanup first (cascade would also remove these rows).
-  for (const table of ["payments", "debts", "user_settings", "debt_plans"]) {
-    const { error } = await admin.from(table).delete().eq("user_id", uid);
-    if (error) return json({ error: "cleanup_failed" }, 500, origin);
+  // Best effort: every table has "on delete cascade" to auth.users, so deleting the user
+  // below removes any row that remains (the service key has no direct access to some tables).
+  for (const table of ["payments", "debts", "user_settings", "debt_plans", "push_subscriptions", "push_settings"]) {
+    await admin.from(table).delete().eq("user_id", uid);
   }
   const { error: delError } = await admin.auth.admin.deleteUser(uid);
   if (delError) return json({ error: "delete_failed" }, 500, origin);
