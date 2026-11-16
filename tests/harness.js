@@ -41,6 +41,7 @@ function buildHtml(configSource) {
  *  config: "placeholder" | "test"
  *  server: FakeServer (enables window.supabase fake when config is "test")
  *  online: initial navigator.onLine
+ *  beforeParse: function(win) run before the page scripts (to install fakes)
  */
 function load(options = {}) {
   const net = { fetch: [], xhr: [], scripts: [], createClient: 0, beacons: [] };
@@ -68,6 +69,8 @@ function load(options = {}) {
           if (t.status === 0) return Promise.reject(new TypeError("Failed to fetch"));
           return Promise.resolve({ ok: t.status >= 200 && t.status < 300, status: t.status, json: async () => JSON.parse(JSON.stringify(t.body)) });
         }
+        // 1.4: the "enviar-recordatorios" Edge Function (VAPID public key + test notification).
+        if (options.server && /\/functions\/v1\/enviar-recordatorios$/.test(String(a[0]))) return Promise.resolve(options.server.pushFunction(a[1] || {}));
         return Promise.reject(new TypeError("network disabled in tests"));
       };
       win.XMLHttpRequest = function () {
@@ -109,6 +112,8 @@ function load(options = {}) {
         for (const n of nodes) if (n && n.tagName === "SCRIPT" && n.src) net.scripts.push({ src: n.src, integrity: n.integrity, crossOrigin: n.crossOrigin });
         return append.apply(this, nodes);
       };
+      // 1.4: lets a test install fakes (Notification, PushManager, service worker…) before the app runs.
+      if (typeof options.beforeParse === "function") options.beforeParse(win);
       if (options.server) {
         lib = createFakeLib(options.server, win);
         win.supabase = {

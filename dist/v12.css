@@ -80,3 +80,5 @@
 .owe-tip{background:#f1f7f0;border:1px solid #d9e8d8;border-radius:12px;padding:12px 14px;margin:12px 0}
 .owe-tip-text{margin:0 0 10px}
 @media(max-width:420px){.owe-row{grid-template-columns:14px 1fr}.owe-nums{grid-column:2;flex-direction:row;gap:8px;align-items:baseline}}
+/* 1.4 Notificaciones */
+.notifications-block .actions{flex-wrap:wrap}.notifications-block #push-enable{background:#e7f3df;border-color:#cfe5c4}.push-device{font-weight:700}.push-steps{margin:6px 0 10px;padding-left:20px;font-size:13px;line-height:1.45;color:#40584a}.push-help button{margin-top:4px}

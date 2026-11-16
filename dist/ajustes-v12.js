@@ -1,5 +1,6 @@
 /* Ajustes de la versión 1.2: moneda por defecto, recordatorios (activar, hora,
-   días de anticipación) y exportación de pagos a CSV. */
+   días de anticipación) y exportación de pagos a CSV.
+   1.4: la sección "Notificaciones" (web push, prueba y archivo de calendario .ics). */
 (function () {
   "use strict";
   const more = document.querySelector("#view-more .more-settings");
@@ -7,14 +8,55 @@
   if (!more || !S) return;
   const T = {
     currencyNote: "La moneda elegida se usa por defecto al crear deudas nuevas. Cada deuda conserva su propia moneda y los totales nunca se mezclan.",
-    remTitle: "Recordatorios",
-    remEnable: "Activar avisos",
+    remTitle: "Notificaciones",
+    remEnable: "Recordarme mis pagos",
     remTime: "Hora del aviso",
     remDays: "Avisar con anticipación",
     day1: "1 día antes",
     day3: "3 días antes",
     day7: "7 días antes",
-    remNote: "Los avisos se muestran en este dispositivo mientras la aplicación está abierta, a partir de la hora elegida. El contador rojo de Inicio cuenta los pagos vencidos y los que vencen dentro de los días elegidos.",
+    remNote: "Recibirás un aviso los días elegidos antes de cada pago, el día del vencimiento y si un pago queda vencido, a partir de la hora elegida. El contador rojo de Inicio cuenta los pagos vencidos y los que vencen dentro de los días elegidos.",
+    pushIntro: "Recibe un aviso en este teléfono o computador antes de cada pago, aunque la app esté cerrada.",
+    pushAccount: "Los avisos los envía tu cuenta con las deudas sincronizadas: necesitas iniciar sesión. Actívalos en cada dispositivo donde quieras recibirlos.",
+    pushEnable: "Activar notificaciones",
+    pushDisable: "Desactivar en este dispositivo",
+    pushTest: "Enviar notificación de prueba",
+    deviceOn: "Este dispositivo recibe notificaciones.",
+    deviceOff: "Este dispositivo no recibe notificaciones.",
+    pushOn: "¡Listo! Te avisaremos antes de cada pago en este dispositivo.",
+    pushOnNoSettings: "Notificaciones activadas. No se pudieron guardar tus preferencias en la cuenta; se intentará de nuevo.",
+    pushOff: "Notificaciones desactivadas en este dispositivo.",
+    pushOffPartial: "Se desactivaron en este dispositivo, pero no se pudo avisar a tu cuenta. Inténtalo de nuevo con conexión.",
+    pushNeedAccount: "Para recibir notificaciones necesitas una cuenta con tus deudas sincronizadas.",
+    pushGoAccount: "Crear cuenta o iniciar sesión",
+    pushUnsupported: "Este navegador no admite notificaciones. Prueba con una versión reciente de Chrome, Edge, Firefox o Safari.",
+    pushError: "No se pudieron activar las notificaciones. Inténtalo de nuevo más tarde.",
+    iosIntro: "En iPhone y iPad, las notificaciones solo funcionan con la app instalada:",
+    ios1: "Abre esta página en Safari y toca Compartir.",
+    ios2: "Elige «Agregar a pantalla de inicio» y luego «Agregar».",
+    ios3: "Abre la app desde el ícono nuevo y toca «Activar notificaciones».",
+    deniedIntro: "El navegador bloqueó las notificaciones de esta app. Para permitirlas:",
+    denied1: "En el computador: toca el ícono junto a la dirección de la página, busca «Notificaciones» y elige «Permitir».",
+    denied2: "En Android: abre Chrome, ve a Configuración → Configuración de sitios → Notificaciones y permite esta app.",
+    denied3: "En iPhone o iPad: abre Configuración → Notificaciones → Mi Plan de Deudas y activa «Permitir notificaciones».",
+    denied4: "Luego vuelve aquí y toca «Activar notificaciones».",
+    err_dismissed: "No diste permiso para las notificaciones. Puedes intentarlo de nuevo cuando quieras.",
+    err_locked: "Hay una recuperación pendiente; no se guardó la preferencia.",
+    err_noWorker: "La app aún no está lista para notificaciones. Recarga la página e inténtalo de nuevo.",
+    err_network: "Sin conexión. Inténtalo de nuevo cuando tengas internet.",
+    err_auth: "Tu sesión expiró. Inicia sesión de nuevo.",
+    err_noDevices: "Ningún dispositivo tiene las notificaciones activadas. Toca «Activar notificaciones» primero.",
+    testSending: "Enviando notificación de prueba…",
+    testSent: "Notificación de prueba enviada. Debería llegar en unos segundos.",
+    remNeedButton: "Primero toca «Activar notificaciones» para dar permiso en este dispositivo.",
+    remSavedLocal: "Preferencia guardada en este dispositivo. No se pudo actualizar en tu cuenta; se intentará de nuevo.",
+    icsTitle: "Agregar mis pagos a mi calendario",
+    icsNote: "Descarga un archivo con tus fechas de pago para Google Calendar, Calendario de Apple u Outlook. Cada pago se repite cada mes y te avisa un día antes.",
+    icsUpdate: "Si cambias tus deudas, descarga el archivo de nuevo.",
+    icsButton: "Agregar mis pagos a mi calendario",
+    icsReady: "Archivo mis-pagos.ics listo. Ábrelo para agregar los pagos a tu calendario.",
+    icsEmpty: "Agrega el día de pago a tus deudas para crear el calendario.",
+    icsError: "No se pudo crear el archivo del calendario.",
     remOn: "Avisos activados.",
     remOff: "Avisos desactivados.",
     remSaved: "Preferencia guardada.",
@@ -58,10 +100,32 @@
   const sw = more.querySelector(".switch");
   if (sw) sw.after(el("p", "label currency-note", T.currencyNote));
 
-  /* Reminders. */
+  /* Notificaciones (1.4): web push from the account's server, the in-app notices,
+     reminder time and lead days (same local keys as 1.2, synced to push_settings),
+     a test notification and the calendar file (.ics). */
+  const P = window.MPDDPush;
   const backupTitle = [...more.querySelectorAll("h3")].find((h) => h.dataset.localLabel === "backups");
-  const rem = el("div", "settings-block");
+  const rem = el("div", "settings-block notifications-block");
   const cfg = S.readAvisos(localStorage);
+  const remStatus = el("p", "label");
+  remStatus.setAttribute("role", "status");
+  remStatus.id = "push-status";
+  const help = el("div", "push-help");
+  help.id = "push-help";
+  help.setAttribute("aria-live", "polite");
+  const deviceState = el("p", "label push-device");
+  deviceState.id = "push-device";
+  const actions = el("div", "actions");
+  const mkButton = (id, label, cls) => {
+    const b = el("button", cls, label);
+    b.type = "button";
+    b.id = id;
+    return b;
+  };
+  const pushOn = mkButton("push-enable", T.pushEnable);
+  const pushOff = mkButton("push-disable", T.pushDisable, "ghost");
+  const pushTest = mkButton("push-test", T.pushTest, "ghost");
+  actions.append(pushOn, pushOff, pushTest);
   const enableWrap = el("label", "check-row");
   const enable = el("input");
   enable.type = "checkbox";
@@ -92,11 +156,100 @@
   days.value = String(cfg.daysBefore);
   daysLabel.htmlFor = days.id;
   daysField.append(daysLabel, days);
-  const remStatus = el("p", "label");
-  remStatus.setAttribute("role", "status");
   const grid = el("div", "formgrid");
   grid.append(timeField, daysField);
-  rem.append(enableWrap, grid, el("p", "label", T.remNote), remStatus);
+  rem.append(el("p", "label", T.pushIntro), el("p", "label", T.pushAccount), remStatus, deviceState, actions, help, enableWrap, grid, el("p", "label", T.remNote));
+
+  const signedIn = () => {
+    try {
+      return !!(window.MPDDCloud && window.MPDDCloud.status().userId);
+    } catch (_) {
+      return false;
+    }
+  };
+  function list(items) {
+    const ol = el("ol", "push-steps");
+    for (const t of items) ol.append(el("li", "", t));
+    return ol;
+  }
+  /* Explains why notifications cannot be turned on, with the steps for each case. */
+  function explain(reason) {
+    help.replaceChildren();
+    if (reason === "iosInstall") {
+      remStatus.textContent = T.iosIntro;
+      help.append(list([T.ios1, T.ios2, T.ios3]));
+    } else if (reason === "denied") {
+      remStatus.textContent = T.deniedIntro;
+      help.append(list([T.denied1, T.denied2, T.denied3, T.denied4]));
+    } else if (reason === "unsupported") remStatus.textContent = T.pushUnsupported;
+    else if (reason === "account") {
+      remStatus.textContent = T.pushNeedAccount;
+      const go = el("button", "ghost", T.pushGoAccount);
+      go.type = "button";
+      go.addEventListener("click", () => P && P.askAccount(window));
+      help.append(go);
+    } else remStatus.textContent = T["err_" + reason] || T.pushError;
+  }
+  function refresh() {
+    const active = !!(P && P.deviceActive(window));
+    deviceState.textContent = active ? T.deviceOn : T.deviceOff;
+    pushOn.hidden = active;
+    pushOff.hidden = !active;
+  }
+  /* Server copy of the settings (only when signed in). Retried after sign-in / reconnection. */
+  let pendingSync = false;
+  async function syncSettings(overrides) {
+    if (!P || !signedIn()) return null;
+    const r = await P.syncSettings(window, overrides);
+    pendingSync = !r.ok;
+    return r;
+  }
+  let busy = false;
+  async function run(fn) {
+    if (busy) return;
+    busy = true;
+    for (const b of [pushOn, pushOff, pushTest]) b.disabled = true;
+    try {
+      await fn();
+    } catch (_) {
+      remStatus.textContent = T.pushError;
+    } finally {
+      busy = false;
+      for (const b of [pushOn, pushOff, pushTest]) b.disabled = false;
+      refresh();
+    }
+  }
+  pushOn.addEventListener("click", () =>
+    run(async () => {
+      help.replaceChildren();
+      if (!P) return explain("unsupported");
+      if (locked()) return explain("locked");
+      // The browser permission is requested only here, after this tap.
+      const r = await P.activate(window);
+      if (!r.ok) return explain(r.reason);
+      enable.checked = true;
+      remStatus.textContent = r.settingsSaved ? T.pushOn : T.pushOnNoSettings;
+      pendingSync = !r.settingsSaved;
+      document.dispatchEvent(new Event("mpdd:avisoschange"));
+    })
+  );
+  pushOff.addEventListener("click", () =>
+    run(async () => {
+      help.replaceChildren();
+      const r = await P.deactivate(window);
+      remStatus.textContent = r.ok ? T.pushOff : T.pushOffPartial;
+    })
+  );
+  pushTest.addEventListener("click", () =>
+    run(async () => {
+      help.replaceChildren();
+      if (!P || !signedIn()) return explain("account");
+      remStatus.textContent = T.testSending;
+      const r = await P.sendTest(window);
+      if (r.ok) remStatus.textContent = T.testSent;
+      else explain(r.error === "sin_suscripciones" ? "noDevices" : r.error);
+    })
+  );
   function saveAvisos() {
     if (locked()) {
       remStatus.textContent = T.remLocked;
@@ -118,16 +271,23 @@
       return false;
     }
   }
+  async function savedAndSynced() {
+    remStatus.textContent = T.remSaved;
+    const r = await syncSettings();
+    if (r && !r.ok) remStatus.textContent = T.remSavedLocal;
+  }
   let timeChosen = cfg.timeSet;
   time.addEventListener("change", () => {
     timeChosen = true;
-    if (saveAvisos()) remStatus.textContent = T.remSaved;
+    if (saveAvisos()) savedAndSynced();
   });
   days.addEventListener("change", () => {
-    if (saveAvisos()) remStatus.textContent = T.remSaved;
+    if (saveAvisos()) savedAndSynced();
   });
+  /* On/off for this account's reminders. Never asks for permission: that is the button's job. */
   enable.addEventListener("change", async () => {
     const N = window.DebtForegroundNotices;
+    help.replaceChildren();
     if (locked()) {
       enable.checked = !enable.checked;
       remStatus.textContent = T.remLocked;
@@ -135,12 +295,20 @@
     }
     try {
       if (enable.checked) {
-        const state = N ? await N.enable(window) : { enabled: false };
-        if (!state.enabled) {
+        const state = P ? P.detect(window) : "unsupported";
+        if (state !== "ok") {
           enable.checked = false;
-          remStatus.textContent = state.reason === "denied" ? T.remDenied : T.remError;
+          explain(state);
           return;
         }
+        if (window.Notification.permission !== "granted") {
+          enable.checked = false;
+          remStatus.textContent = T.remNeedButton;
+          return;
+        }
+        // Permission is already granted: just store the preference (no new prompt).
+        localStorage.setItem(S.AVISOS_OPT, "true");
+        if (localStorage.getItem(S.AVISOS_OPT) !== "true") throw new Error(T.remError);
         saveAvisos();
         remStatus.textContent = T.remOn;
       } else {
@@ -148,9 +316,54 @@
         remStatus.textContent = T.remOff;
       }
       document.dispatchEvent(new Event("mpdd:avisoschange"));
+      const r = await syncSettings({ enabled: enable.checked });
+      if (r && !r.ok) remStatus.textContent = T.remSavedLocal;
     } catch (e) {
       enable.checked = S.readAvisos(localStorage).enabled;
       remStatus.textContent = (e && e.message) || T.remError;
+    }
+  });
+  // After signing in (or reconnecting), send this device's settings if it receives notifications.
+  let lastUser = null;
+  if (window.MPDDCloud && typeof window.MPDDCloud.onChange === "function")
+    window.MPDDCloud.onChange((st) => {
+      const uid = st && st.userId;
+      if (!uid) {
+        lastUser = null;
+        setTimeout(refresh, 0);
+        return;
+      }
+      if (uid !== lastUser && st.state === "synced") {
+        lastUser = uid;
+        if (pendingSync || (P && P.deviceActive(window))) syncSettings();
+      }
+    });
+  window.addEventListener("online", () => {
+    if (pendingSync) syncSettings();
+  });
+  refresh();
+
+  /* Calendar file: one monthly all-day event per debt with a due day. */
+  const cal = el("div", "settings-block");
+  const icsButton = mkButton("ics-download", T.icsButton, "ghost");
+  const icsStatus = el("p", "label");
+  icsStatus.setAttribute("role", "status");
+  const icsActions = el("div", "actions");
+  icsActions.append(icsButton);
+  cal.append(el("p", "label", T.icsNote), icsActions, el("p", "label", T.icsUpdate), icsStatus);
+  icsButton.addEventListener("click", () => {
+    if (!P) return;
+    const r = P.buildICS(appDebts(), { lang: en() ? "en" : "es" });
+    if (!r.count) {
+      icsStatus.textContent = T.icsEmpty;
+      return;
+    }
+    window.MPDDLastICS = r.text; // used by automated tests only; no network.
+    try {
+      P.downloadICS(window, r.text);
+      icsStatus.textContent = T.icsReady;
+    } catch (_) {
+      icsStatus.textContent = T.icsError;
     }
   });
 
@@ -209,7 +422,9 @@
   csv.querySelector(".actions").append(go);
 
   const remTitle = el("h3", "", T.remTitle);
+  remTitle.id = "notificaciones-title";
+  const calTitle = el("h3", "", T.icsTitle);
   const csvTitle = el("h3", "", T.csvTitle);
-  if (backupTitle) backupTitle.before(remTitle, rem, csvTitle, csv);
-  else more.append(remTitle, rem, csvTitle, csv);
+  if (backupTitle) backupTitle.before(remTitle, rem, calTitle, cal, csvTitle, csv);
+  else more.append(remTitle, rem, calTitle, cal, csvTitle, csv);
 })();
