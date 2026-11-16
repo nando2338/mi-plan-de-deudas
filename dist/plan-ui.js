@@ -437,16 +437,24 @@
     wizard.setAttribute("aria-labelledby", "plan-step-title");
     document.body.append(wizard);
     document.body.classList.add("plan-wizard-open");
-    wizard.addEventListener("keydown", (e) => {
-      if (e.key !== "Escape") return;
-      e.preventDefault();
-      e.stopPropagation();
-      if (wizard.querySelector(".pw-confirm")) hideExitConfirm();
-      else showExitConfirm();
-    });
     if (fxNeeded(draft) || appDebts().some((x) => Number(x.balance) > 0 && x.currency !== draft.incomeCurrency)) ensureTRM().then(() => wizard && renderStep());
     renderStep();
   }
+  /* Escape, wherever the focus is (also on <body>), while the wizard is open. Not when
+     another dialog is open above it (e.g. the sign-in dialog), which handles its own Escape. */
+  document.addEventListener(
+    "keydown",
+    (e) => {
+      if (e.key !== "Escape" || !wizard || !wizard.isConnected) return;
+      const t = e.target;
+      if (t && t.closest && t.closest("dialog[open]") && !wizard.contains(t)) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      if (wizard.querySelector(".pw-confirm")) hideExitConfirm();
+      else showExitConfirm();
+    },
+    true,
+  );
   /* Escape asks before leaving (in-app dialog, never window.confirm). */
   function showExitConfirm() {
     if (!wizard || wizard.querySelector(".pw-confirm")) return;

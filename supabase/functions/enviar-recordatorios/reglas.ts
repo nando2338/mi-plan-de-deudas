@@ -39,7 +39,7 @@ export interface PlanItem {
 export interface Reminder {
   debtId: string;
   dueDate: string;
-  kind: "antes" | "hoy" | "vencida";
+  kind: "antes" | "manana" | "hoy" | "vencida";
   title: string;
   body: string;
   tag: string;
@@ -130,7 +130,10 @@ export function remindersFor(settings: Settings, now: Date, debts: ReturnType<ty
   if (!settings || !settings.enabled) return [];
   const days = [1, 3, 7].includes(Number(settings.days_before)) ? Number(settings.days_before) : 1;
   const { date: today, time } = localNow(now, settings.tz);
-  const sendTime = /^([01]\d|2[0-3]):[0-5]\d$/.test(settings.send_time) ? settings.send_time : "08:00";
+  const chosen = /^([01]\d|2[0-3]):[0-5]\d$/.test(settings.send_time) ? settings.send_time : "08:00";
+  // The task runs every 15 minutes: round the chosen time down to its quarter hour
+  // (so 23:50 is sent at 23:45 instead of never).
+  const sendTime = chosen.slice(0, 3) + String(Math.floor(Number(chosen.slice(3)) / 15) * 15).padStart(2, "0");
   if (time < sendTime) return [];
   const t = texts(settings.lang);
   const list = S.installments(debts, { from: S.addDays(today, -7), to: S.addDays(today, days), today, planned });
@@ -144,10 +147,13 @@ export function remindersFor(settings: Settings, now: Date, debts: ReturnType<ty
     if (d === 0) {
       kind = "hoy";
       body = amount ? t.today(it.name, amount) : t.todayNoAmount(it.name);
-    } else if (d > 0 && d <= days) {
+    } else if (d === 1) {
+      // Always "Mañana vence", also when the user chose 3 or 7 days (then it is a second reminder).
+      kind = "manana";
+      body = amount ? t.tomorrow(it.name, amount) : t.tomorrowNoAmount(it.name);
+    } else if (d > 1 && d <= days) {
       kind = "antes";
-      if (d === 1) body = amount ? t.tomorrow(it.name, amount) : t.tomorrowNoAmount(it.name);
-      else body = amount ? t.inDays(it.name, d, amount) : t.inDaysNoAmount(it.name, d);
+      body = amount ? t.inDays(it.name, d, amount) : t.inDaysNoAmount(it.name, d);
     } else if (d < 0) {
       kind = "vencida";
       body = t.overdue(it.name);

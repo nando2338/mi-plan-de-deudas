@@ -88,21 +88,29 @@ alter table public.push_settings enable row level security;
 revoke all on public.push_subscriptions, public.push_settings from anon, public;
 grant select, insert, update, delete on public.push_subscriptions, public.push_settings to authenticated;
 
+drop policy if exists push_subscriptions_select_own on public.push_subscriptions;
 create policy push_subscriptions_select_own on public.push_subscriptions for select to authenticated
   using ((select auth.uid()) = user_id);
+drop policy if exists push_subscriptions_insert_own on public.push_subscriptions;
 create policy push_subscriptions_insert_own on public.push_subscriptions for insert to authenticated
   with check ((select auth.uid()) = user_id);
+drop policy if exists push_subscriptions_update_own on public.push_subscriptions;
 create policy push_subscriptions_update_own on public.push_subscriptions for update to authenticated
   using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
+drop policy if exists push_subscriptions_delete_own on public.push_subscriptions;
 create policy push_subscriptions_delete_own on public.push_subscriptions for delete to authenticated
   using ((select auth.uid()) = user_id);
 
+drop policy if exists push_settings_select_own on public.push_settings;
 create policy push_settings_select_own on public.push_settings for select to authenticated
   using ((select auth.uid()) = user_id);
+drop policy if exists push_settings_insert_own on public.push_settings;
 create policy push_settings_insert_own on public.push_settings for insert to authenticated
   with check ((select auth.uid()) = user_id);
+drop policy if exists push_settings_update_own on public.push_settings;
 create policy push_settings_update_own on public.push_settings for update to authenticated
   using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
+drop policy if exists push_settings_delete_own on public.push_settings;
 create policy push_settings_delete_own on public.push_settings for delete to authenticated
   using ((select auth.uid()) = user_id);
 

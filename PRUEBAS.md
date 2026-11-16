@@ -1,5 +1,20 @@
 # Comprobaciones
 
+## Versión 1.4 (rama `version-1.4`, 16 de noviembre de 2026)
+
+Ejecutar: `cd tests && npm test` (109 pruebas) y `npm run check`. Función `enviar-recordatorios`: `cd tests/push && deno run --allow-env --allow-read push.deno.ts`.
+
+**Aprobado:**
+- `tests/v14-metodos.test.js`: datos cargados solos (deudas, mínimos y pago del Plan), métodos iguales, barra de pago extra, "Usar … en mi plan", borrador recuperado en otra pestaña, Escape con confirmación y pagos con TRM que nunca superan lo que se debe.
+- `tests/v14-calendario-grafico.test.js`: colores de pendiente, pagado, vencido y hoy; varios pagos el mismo día; leyenda; "Próximos pagos"; totales por moneda; "Lo que debo" con varias deudas, en las dos monedas y sin datos; etiquetas y consejo.
+- `tests/v14-notificaciones.test.js`: permiso solo al tocar el botón, suscripción guardada, aviso de iPhone sin instalar, ajustes sincronizados, notificación de prueba, archivo .ics (CRLF, plegado, escapes, RRULE y alarma), sin pestaña Avisos y manejadores push del service worker.
+- `tests/v14-cuenta.test.js`: ícono con y sin sesión y su menú, tarjeta de Inicio y "Ahora no" por 7 días, avisos para crear cuenta (plan, notificaciones y tercera deuda) y subida automática sin duplicar.
+- `tests/push/push.deno.ts`: el cifrado de los mensajes se descifra con la librería de referencia `http_ece`, firma VAPID válida, respuestas 404/410 borran la suscripción, solo servicios push reales y reglas de "Mañana/Hoy/Vencida" según hora y zona horaria.
+- Supabase (dev), comprobado en vivo: RLS de `push_subscriptions` y `push_settings` (cada usuario solo lo suyo; sin TRUNCATE; anon bloqueado), claves VAPID creadas en Vault, la función responde a la tarea programada (200) y rechaza secretos falsos (401). La TRM real llegó de datos.gov.co.
+- Revisión visual en Chrome a 390 px (celular) y 1280 px (computador): Inicio, Métodos, Calendario, Gráfico y Más, sin errores de JavaScript.
+
+**Pendiente de probar en equipos reales:** recibir la notificación en Android, iPhone (app instalada) y Chrome de computador; importar el .ics en Google Calendar y en el Calendario de Apple.
+
 ## Versión 1.3 (rama `version-1.3`, 16 de noviembre de 2026)
 
 Ejecutar: `cd tests && npm test` (66 pruebas) y `npm run check`. Función `trm`: `cd tests/trm && deno run --allow-env --import-map=map.json trm.deno.ts`.

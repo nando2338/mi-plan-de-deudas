@@ -137,6 +137,8 @@
   const time = el("input");
   time.type = "time";
   time.id = "avisos-time";
+  // The server checks every 15 minutes: offer quarter-hour times.
+  time.step = "900";
   time.value = cfg.time;
   timeLabel.htmlFor = time.id;
   timeField.append(timeLabel, time);
@@ -341,6 +343,31 @@
   window.addEventListener("online", () => {
     if (pendingSync) syncSettings();
   });
+  // Language or time zone may have changed: the server writes the reminders in that language.
+  document.addEventListener("deudas:languagechange", () => {
+    if (P && P.deviceActive(window)) syncSettings();
+  });
+  // If the browser no longer has the subscription (removed by the browser, the server or
+  // another device), do not keep saying "este dispositivo recibe notificaciones".
+  if (P && P.deviceActive(window)) {
+    try {
+      const sw = navigator.serviceWorker;
+      const perm = window.Notification && window.Notification.permission;
+      if (perm && perm !== "granted") {
+        P.setDevice(window, false);
+      } else if (sw && sw.getRegistration) {
+        sw.getRegistration()
+          .then((reg) => (reg && reg.pushManager ? reg.pushManager.getSubscription() : undefined))
+          .then((sub) => {
+            if (sub === null) {
+              P.setDevice(window, false);
+              refresh();
+            }
+          })
+          .catch(() => {});
+      }
+    } catch (_) {}
+  }
   refresh();
 
   /* Calendar file: one monthly all-day event per debt with a due day. */

@@ -1,0 +1,12 @@
+# Supabase CLI settings for this project (only what the app needs).
+# Both functions are deployed WITHOUT JWT verification at the gateway, because:
+#  * trm: the TRM is public data and the app calls it without a session.
+#  * enviar-recordatorios: pg_cron calls it without a session; the function checks itself
+#    (cron secret in Vault, or the user's token for the test notification).
+project_id = "gwykdlwuipirusfixioo"
+
+[functions.trm]
+verify_jwt = false
+
+[functions.enviar-recordatorios]
+verify_jwt = false

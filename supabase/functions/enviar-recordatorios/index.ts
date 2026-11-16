@@ -107,38 +107,59 @@ async function scheduled(req: Request) {
   if (error) return json({ error: "settings" }, 500);
   let users = 0,
     sent = 0,
-    removed = 0;
+    removed = 0,
+    failed = 0;
   for (const st of settings || []) {
-    const uid = st.user_id as string;
-    const { data: subs } = await admin.from("push_subscriptions").select("id,endpoint,p256dh,auth").eq("user_id", uid);
-    if (!subs?.length) continue;
-    const [{ data: debts }, { data: pays }, { data: plan }] = await Promise.all([
-      admin.from("debts").select("id,name,balance,currency,due,extra,deleted_at").eq("user_id", uid),
-      admin.from("payments").select("debt_id,amount,paid_on,due_on").eq("user_id", uid),
-      admin.from("debt_plans").select("items,plan_month").eq("user_id", uid).maybeSingle(),
-    ]);
-    const list = remindersFor(st, now, toAppDebts(debts || [], pays || []), plannedFrom(plan?.items, plan?.plan_month)).slice(0, MAX_PER_USER);
-    if (!list.length) continue;
-    users++;
-    let live = subs as SubRow[];
-    for (const r of list) {
-      const { data: first } = await admin.rpc("mpdd_push_mark", { p_user: uid, p_debt: r.debtId, p_due: r.dueDate, p_kind: r.kind });
-      if (first !== true) continue; // already sent before
-      const res = await sendToUser(live, JSON.stringify({ title: r.title, body: r.body, url: "/?vista=calendario", tag: r.tag }));
-      sent += res.sent;
-      removed += res.removed;
-      if (res.removed) {
-        const { data: again } = await admin.from("push_subscriptions").select("id,endpoint,p256dh,auth").eq("user_id", uid);
-        live = (again || []) as SubRow[];
-      }
-      // Not delivered to any device (e.g. the push service is down): retry on the next run.
-      if (res.sent === 0 && live.length) await admin.rpc("mpdd_push_unmark", { p_user: uid, p_debt: r.debtId, p_due: r.dueDate, p_kind: r.kind });
-      if (!live.length) break;
+    // One user's problem never stops the reminders of the others.
+    try {
+      const r = await sendForUser(st, now);
+      if (r.counted) users++;
+      sent += r.sent;
+      removed += r.removed;
+    } catch (_) {
+      failed++;
     }
   }
   // Counts only, no personal data.
-  console.log(JSON.stringify({ accion: "programado", usuarios: users, enviadas: sent, borradas: removed }));
-  return json({ ok: true, usuarios: users, enviadas: sent, borradas: removed });
+  console.log(JSON.stringify({ accion: "programado", usuarios: users, enviadas: sent, borradas: removed, fallidos: failed }));
+  return json({ ok: true, usuarios: users, enviadas: sent, borradas: removed, fallidos: failed });
+}
+
+// deno-lint-ignore no-explicit-any
+async function sendForUser(st: any, now: Date) {
+  let sent = 0,
+    removed = 0,
+    counted = false;
+  const uid = st.user_id as string;
+  const { data: subs } = await admin.from("push_subscriptions").select("id,endpoint,p256dh,auth").eq("user_id", uid);
+  if (!subs?.length) return { sent, removed, counted };
+  const [{ data: debts }, { data: pays }, { data: plan }] = await Promise.all([
+    admin.from("debts").select("id,name,balance,currency,due,extra,deleted_at").eq("user_id", uid),
+    admin.from("payments").select("debt_id,amount,paid_on,due_on").eq("user_id", uid),
+    admin.from("debt_plans").select("items,plan_month").eq("user_id", uid).maybeSingle(),
+  ]);
+  const list = remindersFor(st, now, toAppDebts(debts || [], pays || []), plannedFrom(plan?.items, plan?.plan_month));
+  let live = subs as SubRow[];
+  let newOnes = 0;
+  for (const r of list) {
+    // The cap counts only NEW reminders, so already-sent ones never block today's.
+    if (newOnes >= MAX_PER_USER) break;
+    const { data: first } = await admin.rpc("mpdd_push_mark", { p_user: uid, p_debt: r.debtId, p_due: r.dueDate, p_kind: r.kind });
+    if (first !== true) continue; // already sent before
+    newOnes++;
+    counted = true;
+    const res = await sendToUser(live, JSON.stringify({ title: r.title, body: r.body, url: "/?vista=calendario", tag: r.tag }));
+    sent += res.sent;
+    removed += res.removed;
+    if (res.removed) {
+      const { data: again } = await admin.from("push_subscriptions").select("id,endpoint,p256dh,auth").eq("user_id", uid);
+      live = (again || []) as SubRow[];
+    }
+    // Not delivered to any device (e.g. the push service is down): retry on the next run.
+    if (res.sent === 0 && live.length) await admin.rpc("mpdd_push_unmark", { p_user: uid, p_debt: r.debtId, p_due: r.dueDate, p_kind: r.kind });
+    if (!live.length) break;
+  }
+  return { sent, removed, counted };
 }
 
 Deno.serve(async (req) => {

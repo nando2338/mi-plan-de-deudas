@@ -347,3 +347,13 @@ test("1.3: con TRM el pago nunca supera lo que se debe ni baja del mínimo; redo
   }
   assert.equal(checked, 288);
 });
+
+test("revisión 1.4: Escape funciona aunque el foco esté en <body>", async () => {
+  const h = load({ storage: Object.assign({}, ES, { "nando-deudas-v1": JSON.stringify([debt("a", "A", { minPayment: 20 })]) }) });
+  await sleep(60);
+  clickText(h, "#plan-root", "Empezar");
+  const wizard = h.doc.querySelector(".plan-wizard");
+  h.doc.activeElement.blur();
+  h.doc.body.dispatchEvent(new h.win.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+  assert.ok(wizard.querySelector(".pw-confirm-box"), "aparece la confirmación");
+});

@@ -156,7 +156,7 @@ Requisitos: Node.js 20 o superior.
 ```bash
 cd tests
 npm install        # instala jsdom (solo para pruebas)
-npm test           # 66 pruebas automatizadas con DOM simulado
+npm test           # 109 pruebas automatizadas con DOM simulado
 npm run check      # node --check en todos los JS + recursos de HTML, service worker y manifiesto
 ```
 

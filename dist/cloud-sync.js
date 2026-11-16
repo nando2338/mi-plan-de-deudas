@@ -13,6 +13,7 @@
   const KEY = "nando-deudas-v1",
     JOURNAL = "nando-restore-journal-v1",
     STATE_KEY = "mpdd-cloud-state-v1",
+    RESET_KEY = "mpdd-cloud-reset-v1",
     ACTIVE_KEY = "mpdd-cloud-active-v1",
     PREBACKUP_KEY = "mpdd-cloud-prebackup-v1";
   const PREFIXES_TO_WIPE = ["nando-deudas-recovery-v1:", "nando-prefs-recovery-v1:", "mpdd-cloud-", "sb-"];
@@ -379,11 +380,16 @@
       const remoteSettings = ["deudas-budget-v1", "nando-recordatorios-v1"].filter((k) => rs.get(k) && rs.get(k).value !== null).length;
       if (!local.length && !localSettings) return resolveLink("cloud", true);
       const otherUser = !!(state && state.userId && state.userId !== status.userId);
+      // The user deleted this account's cloud data from another device: ask before re-uploading.
+      let afterReset = false;
+      try {
+        afterReset = ls.getItem(RESET_KEY) === String(status.userId);
+      } catch (_) {}
       // 1.4: new or empty account + data on this device: upload without asking.
       // Nothing in the cloud is replaced, records are keyed by id (no duplicates),
       // and a pre-sync copy is still stored. Data last used with ANOTHER account
       // keeps the question so it is never uploaded to the wrong account silently.
-      if (!remoteDebts && !remoteSettings && !otherUser) return resolveLink("upload", false);
+      if (!remoteDebts && !remoteSettings && !otherUser && !afterReset) return resolveLink("upload", false);
       status.choice = {
         kind: remoteDebts || remoteSettings ? "both" : "upload",
         localDebts: local.length,
@@ -479,6 +485,9 @@
         }
       } else return { ok: false, error: "choice" };
       writeState(state);
+      try {
+        ls.removeItem(RESET_KEY);
+      } catch (_) {}
       await sync({ pulled: pull });
       return { ok: true };
     } catch (e) {
@@ -603,6 +612,7 @@
     if (cloudEmpty && wasSynced) {
       try {
         ls.removeItem(STATE_KEY);
+        ls.setItem(RESET_KEY, String(status.userId));
       } catch (_) {}
       await api.signOut({ keepLocal: true, reload: false });
       setState("signedOut", { error: "remoteReset", pending: 0 });
@@ -784,7 +794,7 @@
   function wipeLocal() {
     if (locked()) return false;
     const keep = new Set(["deudas-lang-v1"]);
-    const exact = new Set([KEY, ...window.DebtBackupPlus.PREFS, "mpdd-foreground-notices-sent-v1"]);
+    const exact = new Set([KEY, ...window.DebtBackupPlus.PREFS, "mpdd-foreground-notices-sent-v1", "mpdd-plan-draft-v1", "mpdd-account-prompts-v1", "mpdd-push-device-v1"]);
     const keys = [];
     for (let i = 0; i < ls.length; i++) keys.push(ls.key(i));
     for (const k of keys) {
@@ -849,6 +859,7 @@
     } catch (_) {}
     try {
       ls.removeItem(STATE_KEY);
+      ls.removeItem("mpdd-push-device-v1");
     } catch (_) {}
     return { ok: true, dataDeleted: true, accountDeleted };
   };

@@ -59,6 +59,9 @@ function eq(a: unknown, b: unknown, msg: string) {
   eq(await sendPush(sub, "x", { publicKey: k.publicKey, key, subject: "s" }, async () => new Response(null, { status: 404 })), { ok: false, gone: true, status: 404 }, "404 = borrar");
   eq(await sendPush(sub, "x", { publicKey: k.publicKey, key, subject: "s" }, async () => new Response(null, { status: 500 })), { ok: false, gone: false, status: 500 }, "500 = reintentar");
   eq(await sendPush(sub, "x", { publicKey: k.publicKey, key, subject: "s" }, async () => { throw new Error("red"); }), { ok: false, gone: false, status: 0 }, "error de red");
+  let called = false;
+  eq(await sendPush({ ...sub, p256dh: "A".repeat(40) }, "x", { publicKey: k.publicKey, key, subject: "s" }, async () => { called = true; return new Response(null, { status: 201 }); }), { ok: false, gone: true, status: 0 }, "clave inválida = borrar, sin lanzar error");
+  ok(!called, "no se llama al servicio push con claves inválidas");
 }
 
 // 4) Only real push services.
@@ -89,18 +92,21 @@ ok(!allowedEndpoint("https://fcm.googleapis.com:8443/x"), "otro puerto");
   eq(list.map((r) => [r.kind, r.body]), [
     ["vencida", "Carro está vencida"],
     ["hoy", "Hoy vence Préstamo: US$30.00 USD"],
-    ["antes", "Mañana vence Tarjeta: $150.000 COP"],
+    ["manana", "Mañana vence Tarjeta: $150.000 COP"],
   ], "mañana, hoy y vencida (sin pagadas ni borradas)");
   eq(remindersFor(st, new Date("2026-11-16T12:59:00Z"), debts, {}).length, 0, "antes de la hora elegida no envía");
   eq(remindersFor({ ...st, enabled: false }, now, debts, {}).length, 0, "desactivado no envía");
   const three = remindersFor({ ...st, days_before: 3 }, now, debts.filter((d) => d.id === "a"), {});
-  eq(three.map((r) => r.body), ["Mañana vence Tarjeta: $150.000 COP"], "3 días: el 17 sigue siendo mañana");
+  eq(three.map((r) => [r.kind, r.body]), [["manana", "Mañana vence Tarjeta: $150.000 COP"]], "3 días: el día anterior también avisa 'Mañana vence'");
   const in3 = remindersFor({ ...st, days_before: 3 }, new Date("2026-11-14T14:00:00Z"), debts.filter((d) => d.id === "a"), {});
   eq(in3.map((r) => r.body), ["Tarjeta vence en 3 días: $150.000 COP"], "aviso 3 días antes");
   const en = remindersFor({ ...st, lang: "en" }, now, debts.filter((d) => d.id === "b"), {});
   eq(en.map((r) => [r.title, r.body]), [["My Debt Plan", "Préstamo is due today: US$30.00 USD"]], "inglés");
   const planned = plannedFrom([{ debtId: "a", payment: 400000, dueDate: "2026-11-17" }], "2026-11-01");
   eq(remindersFor(st, now, debts.filter((d) => d.id === "a"), planned).map((r) => r.body), ["Mañana vence Tarjeta: $400.000 COP"], "usa el monto del plan");
+  // Times rounded down to the quarter hour: 23:50 goes out at 23:45 (the task runs every 15 min).
+  eq(remindersFor({ ...st, send_time: "23:50" }, new Date("2026-11-17T04:45:00Z"), debts.filter((d) => d.id === "a"), {}).map((r) => r.kind), ["manana"], "23:50 se envía a las 23:45");
+  eq(remindersFor({ ...st, send_time: "23:50" }, new Date("2026-11-17T04:44:00Z"), debts.filter((d) => d.id === "a"), {}).length, 0, "antes del cuarto de hora no");
   eq(remindersFor({ ...st, tz: "Zona/Inventada" }, now, debts.filter((d) => d.id === "b"), {}).length, 1, "zona inválida → Bogotá");
 }
 

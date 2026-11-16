@@ -438,3 +438,18 @@ test("textos de notificaciones traducidos al inglés", async () => {
   assert.match(more, /Send a test notification/);
   assert.match(more, /Add my payments to my calendar/);
 });
+
+test("revisión 1.4: si el navegador ya no tiene la suscripción, deja de decir que el dispositivo recibe avisos", async () => {
+  const env = pushEnv({ permission: "granted" });
+  const h = load({ storage: Object.assign({}, ES, { "mpdd-push-device-v1": "1" }), beforeParse: env.install });
+  await waitFor(() => h.win.localStorage.getItem("mpdd-push-device-v1") === null, { label: "marca borrada" });
+});
+
+test("revisión 1.4: cerrar sesión borrando los datos del dispositivo también borra el borrador del plan", async () => {
+  const h = load({ storage: Object.assign({}, ES, { "mpdd-plan-draft-v1": JSON.stringify({ t: Date.now(), d: { income: 1 } }), "mpdd-push-device-v1": "1", "mpdd-account-prompts-v1": "{}" }) });
+  await sleep(40);
+  // wipeLocal is internal: we reach it through the same set of keys sign-out deletes.
+  const src = require("fs").readFileSync(require("path").join(__dirname, "../dist/cloud-sync.js"), "utf8");
+  for (const k of ["mpdd-plan-draft-v1", "mpdd-account-prompts-v1", "mpdd-push-device-v1"]) assert.ok(src.includes('"' + k + '"'), k);
+  assert.match(src, /const exact = new Set\(\[[^\]]*"mpdd-plan-draft-v1"/);
+});

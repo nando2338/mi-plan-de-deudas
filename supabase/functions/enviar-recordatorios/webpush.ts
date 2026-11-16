@@ -110,8 +110,14 @@ export async function sendPush(
   vapid: { publicKey: string; key: CryptoKey; subject: string },
   fetchFn: typeof fetch = fetch,
 ): Promise<SendResult> {
-  const body = await encrypt(enc.encode(payload), sub.p256dh, sub.auth);
-  const jwt = await vapidToken(sub.endpoint, vapid.subject, vapid.key);
+  let body: Bytes, jwt: string;
+  try {
+    body = await encrypt(enc.encode(payload), sub.p256dh, sub.auth);
+    jwt = await vapidToken(sub.endpoint, vapid.subject, vapid.key);
+  } catch (_) {
+    // Malformed subscription keys: it can never work, delete it.
+    return { ok: false, gone: true, status: 0 };
+  }
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), 10000);
   try {
