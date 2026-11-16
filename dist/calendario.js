@@ -18,11 +18,24 @@
     unknownHelp: "Agrega la cuota mensual al editar la deuda para sumarla aquí.",
     prev: "Mes anterior",
     next: "Mes siguiente",
-    legendPaid: "Pagado a tiempo",
-    legendLate: "Vencido sin pagar o pagado tarde",
-    legendToday: "Hoy",
-    legendPending: "Pendiente",
+    legendPending: "Pago pendiente",
+    legendPaid: "Pagado",
+    legendLate: "Vencido sin pagar",
+    legendToday: "Hoy (borde oscuro)",
+    legendMany: "Varios pagos (cantidad)",
     legendNone: "Sin pagos",
+    legendTitle: "Colores del calendario",
+    upTitle: "Próximos pagos",
+    upIntro: "Cuotas vencidas sin pagar y pagos de los próximos 30 días. Toca uno para verlo en el calendario.",
+    upEmpty: "No tienes pagos pendientes en los próximos 30 días.",
+    today: "Hoy",
+    tomorrow: "Mañana",
+    inDays: "En",
+    days: "días",
+    day: "día",
+    overdueAgo: "Vencido hace",
+    cutoff: "Fecha de corte",
+    paymentsCount: "pagos",
     noDue: "Para ver tus cuotas en el calendario, agrega el día de vencimiento a cada deuda.",
     dayEmpty: "No hay pagos este día.",
     due: "Vence:",
@@ -35,6 +48,7 @@
     chip_late: "Pagado tarde",
     chip_paid: "Pagado",
     chip_pending: "Pendiente",
+    chip_overdue: "Vencido",
     inPlan: "Según tu plan",
   };
   window.MPDDStrings = Object.assign(window.MPDDStrings || {}, { calendario: T });
@@ -64,7 +78,7 @@
     }
   }
   function chip(status) {
-    const key = status === "overdue" || status === "dueToday" ? "pending" : status;
+    const key = status === "overdue" ? "overdue" : status === "dueToday" ? "pending" : status;
     return el("span", "status-chip st-" + key, T["chip_" + key] || T.chip_pending);
   }
   function moneyLines(totals) {
@@ -92,22 +106,35 @@
   nav.append(prev, monthTitle, next);
   const grid = el("div", "cal-grid");
   grid.setAttribute("role", "grid");
-  const legend = el("div", "cal-legend");
-  for (const [cls, key] of [
-    ["paid", "legendPaid"],
-    ["late", "legendLate"],
-    ["today", "legendToday"],
-    ["pending", "legendPending"],
-    ["none", "legendNone"],
+  /* Legend (1.4). Today keeps its state: dark border, no background, and the
+     state is shown by the colored dot or count. */
+  const legendTitle = el("p", "visually-hidden", T.legendTitle);
+  legendTitle.id = "cal-legend-title";
+  const legend = el("ul", "cal-legend");
+  legend.setAttribute("aria-labelledby", legendTitle.id);
+  for (const [cls, key, mark] of [
+    ["pending", "legendPending", "dot"],
+    ["paid", "legendPaid", ""],
+    ["late", "legendLate", ""],
+    ["today", "legendToday", ""],
+    ["pending", "legendMany", "2"],
+    ["none", "legendNone", ""],
   ]) {
-    const item = el("span", "legend-item");
-    item.append(el("i", "swatch c-" + cls), el("span", "", T[key]));
+    const item = el("li", "legend-item legend-" + key);
+    const sw = el("i", "swatch c-" + cls);
+    sw.setAttribute("aria-hidden", "true");
+    if (mark === "dot") sw.append(el("span", "sw-dot"));
+    else if (mark) sw.append(raw("span", mark, "sw-count"));
+    item.append(sw, el("span", "", T[key]));
     legend.append(item);
   }
   const noDue = el("p", "notice", T.noDue);
   const detail = el("div", "cal-detail");
   detail.setAttribute("aria-live", "polite");
-  section.append(h2, intro, summary, nav, grid, legend, noDue, detail);
+  const upBox = el("div", "cal-upcoming");
+  const upList = el("ul", "upcoming-list");
+  upBox.append(el("h3", "", T.upTitle), el("p", "label", T.upIntro), upList);
+  section.append(h2, intro, summary, nav, grid, legendTitle, legend, noDue, detail, upBox);
   view.append(section);
 
   let ym = (() => {
@@ -154,27 +181,118 @@
       const date = from.slice(0, 8) + String(d).padStart(2, "0");
       const di = inst.filter((x) => x.dueDate === date),
         dp = pays.filter((x) => x.date === date);
-      const color = S.dayColor(date, t, di, dp);
-      const cell = el("button", "cal-day c-" + color + (selected === date ? " selected" : ""));
+      const extra = extraPayments(di, dp);
+      const color = S.dayColor(date, t, di, extra);
+      const n = di.length + extra.length;
+      const cell = el("button", "cal-day c-" + color + (date === t ? " c-today" : "") + (selected === date ? " selected" : ""));
       cell.type = "button";
       cell.dataset.date = date;
+      cell.dataset.state = color;
       cell.append(raw("span", String(d), "num"));
-      if (di.length + dp.length) cell.append(el("span", "dot"));
-      cell.setAttribute("aria-label", formatLong(date));
+      if (n > 1) cell.append(raw("span", String(n), "cal-count"));
+      else if (n === 1) cell.append(el("span", "dot"));
+      let label = formatLong(date);
+      if (date === t) label += en() ? " · today" : " · hoy";
+      if (n) label += " · " + n + " " + (en() ? (n === 1 ? "payment" : "payments") : n === 1 ? "pago" : T.paymentsCount);
+      const stateName = { late: en() ? "overdue" : "vencido", pending: en() ? "pending" : "pendiente", paid: en() ? "paid" : "pagado" }[color];
+      if (stateName) label += " · " + stateName;
+      cell.setAttribute("aria-label", label);
+      if (date === t) cell.setAttribute("aria-current", "date");
       if (selected === date) cell.setAttribute("aria-pressed", "true");
       grid.append(cell);
     }
     noDue.hidden = list.some((x) => S.dueDay(x));
-    renderDetail(inst, pays, t);
+    const cuts = readCutoffs(list, t);
+    renderDetail(inst, pays, t, cuts);
+    renderUpcoming(list, t, planned, cuts);
   }
-  function renderDetail(inst, pays, t) {
+  /* Payments of a day that do not belong to an installment shown that same day. */
+  function extraPayments(di, dp) {
+    return dp.filter((x) => !di.some((i) => i.payment && i.debtId === x.debtId && i.payment.date === x.date));
+  }
+  /* Cutoff dates configured in the reminders (read only; the settings live elsewhere). */
+  function readCutoffs(list, t) {
+    try {
+      const rawPrefs = localStorage.getItem("nando-recordatorios-v1");
+      const prefs = rawPrefs === null ? {} : JSON.parse(rawPrefs);
+      return S.cutoffs(list, prefs, t, 30);
+    } catch (_) {
+      return [];
+    }
+  }
+  function relative(days) {
+    const box = el("span", "up-when" + (days < 0 ? " is-overdue" : days === 0 ? " is-today" : ""));
+    if (days === 0) box.append(el("span", "", T.today));
+    else if (days === 1) box.append(el("span", "", T.tomorrow));
+    else if (days > 1) box.append(el("span", "", T.inDays), " ", raw("span", String(days)), " ", el("span", "", T.days));
+    else box.append(el("span", "", T.overdueAgo), " ", raw("span", String(-days)), " ", el("span", "", -days === 1 ? T.day : T.days));
+    return box;
+  }
+  function shortDate(dateStr) {
+    const [y, m, d] = dateStr.split("-").map(Number);
+    return new Intl.DateTimeFormat(locale(), { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(Date.UTC(y, m - 1, d)));
+  }
+  function renderUpcoming(list, t, planned, cuts) {
+    upList.replaceChildren();
+    const rows = S.upcoming(list, t, { daysAhead: 30, planned }).map((i) => ({ kind: "payment", date: i.dueDate, days: i.days, it: i }));
+    for (const c of cuts) rows.push({ kind: "cutoff", date: c.date, days: c.days, it: c });
+    rows.sort((a, b) => a.date.localeCompare(b.date) || (a.kind === b.kind ? 0 : a.kind === "payment" ? -1 : 1) || a.it.name.localeCompare(b.it.name));
+    if (!rows.length) {
+      upList.append(el("li", "label up-empty", T.upEmpty));
+      return;
+    }
+    for (const r of rows) {
+      const li = el("li");
+      const btn = el("button", "upcoming-row up-" + r.kind + (r.days < 0 ? " is-overdue" : ""));
+      btn.type = "button";
+      btn.dataset.date = r.date;
+      btn.dataset.debtId = r.it.debtId;
+      const when = el("span", "up-date");
+      when.append(raw("span", shortDate(r.date), "up-day"), relative(r.days));
+      const body = el("span", "up-body");
+      body.append(raw("strong", r.it.name, "up-name"));
+      if (r.kind === "cutoff") body.append(el("span", "label", T.cutoff));
+      const amt = el("span", "up-amount");
+      if (r.kind === "payment") {
+        if (r.it.expected !== null) amt.append(raw("span", MPDDMoney.formatMoney(r.it.expected, r.it.currency)));
+        else amt.append(el("span", "muted", T.noAmount));
+        if (r.it.planned) amt.append(el("span", "plan-chip", T.inPlan));
+      }
+      btn.append(when, body, amt);
+      li.append(btn);
+      upList.append(li);
+    }
+  }
+  function openDay(date) {
+    ym = { y: +date.slice(0, 4), m: +date.slice(5, 7) };
+    selected = date;
+    safeRender();
+    const cell = grid.querySelector('.cal-day[data-date="' + date + '"]');
+    if (cell && typeof cell.focus === "function") cell.focus({ preventScroll: true });
+    if (typeof detail.scrollIntoView === "function") detail.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }
+  upList.addEventListener("click", (e) => {
+    const row = e.target.closest(".upcoming-row");
+    if (row && S.validDate(row.dataset.date)) openDay(row.dataset.date);
+  });
+  function renderDetail(inst, pays, t, cuts) {
     detail.replaceChildren();
     if (!selected || selected.slice(0, 7) !== ym.y + "-" + String(ym.m).padStart(2, "0")) return;
     detail.append(raw("h3", formatLong(selected)));
     const di = inst.filter((x) => x.dueDate === selected);
-    const dp = pays.filter((x) => x.date === selected && !di.some((i) => i.payment && i.debtId === x.debtId && i.payment.date === x.date));
+    const dp = extraPayments(di, pays.filter((x) => x.date === selected));
+    const dc = (cuts || []).filter((c) => c.date === selected);
+    if (dc.length) {
+      const ulc = el("ul", "pay-list cutoff-list");
+      for (const c of dc) {
+        const li = el("li", "pay-row");
+        li.append(el("span", "status-chip st-pending", T.cutoff), raw("strong", c.name));
+        ulc.append(li);
+      }
+      detail.append(ulc);
+    }
     if (!di.length && !dp.length) {
-      detail.append(el("p", "label", T.dayEmpty));
+      if (!dc.length) detail.append(el("p", "label", T.dayEmpty));
       return;
     }
     const ul = el("ul", "pay-list");

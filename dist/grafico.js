@@ -1,5 +1,6 @@
-/* Pestaña "Gráfico" (versión 1.2): dona de lo pagado en un periodo, una moneda a la vez.
-   Nunca mezcla USD y COP en la misma dona. Datos del usuario solo con textContent. */
+/* Pestaña "Gráfico": "Lo que debo" (1.4, por defecto) y "Lo que pagué" (dona de lo pagado
+   en un periodo, versión 1.2). Una moneda a la vez: nunca mezcla ni convierte USD y COP.
+   Datos del usuario solo con textContent; el SVG se arma con APIs del DOM. */
 (function () {
   "use strict";
   const view = document.getElementById("view-chart");
@@ -20,6 +21,37 @@
     listEmpty: "No hay pagos registrados en el periodo.",
     badRange: "La fecha «Desde» debe ser anterior o igual a «Hasta».",
     dueShort: "Vence:",
+    // 1.4 "Lo que debo"
+    chartTitle: "Tu gráfico",
+    modeOwe: "Lo que debo",
+    modePaid: "Lo que pagué",
+    modeLabel: "Qué quieres ver",
+    viewLabel: "Periodo",
+    viewMonth: "Este mes",
+    viewTotal: "Deuda total",
+    oweIntroMonth: "Lo que te falta pagar este mes en cada deuda: tu plan si lo tienes, si no la cuota o pago mínimo.",
+    oweIntroTotal: "El saldo que debes hoy en cada deuda.",
+    alsoHave: "También tienes",
+    debtIn: "deuda en",
+    debtsIn: "deudas en",
+    noDebtsAtAll: "Aún no tienes deudas registradas. Agrega una para ver aquí lo que debes.",
+    noDebtsIn: "No tienes deudas en",
+    addDebt: "Agregar deuda",
+    nothingThisMonth: "No tienes pagos pendientes este mes en esta moneda.",
+    seeTotal: "Ver deuda total",
+    unknownMonth: "Deudas sin cuota definida:",
+    rate: "Tasa:",
+    ratePending: "Tasa pendiente",
+    tagPricey: "Más cara",
+    tagSmall: "Más pequeña",
+    tagOverdue: "Pago vencido",
+    tipBiggest: "Tu deuda más grande es",
+    tipButCostly: ", pero la que más te cuesta es",
+    tipBiggestSame: "Tu deuda más grande,",
+    tipAlsoCostly: ", también es la que más te cuesta.",
+    tipNoRates: "Agrega la tasa de interés de tus deudas para saber cuál te cuesta más.",
+    compare: "Comparar en Métodos",
+    donutOf: "Gráfico de dona:",
   };
   window.MPDDStrings = Object.assign(window.MPDDStrings || {}, { grafico: T });
   const COLORS = ["#146a55", "#d8a03a", "#4f7cac", "#b5523b", "#7a5aa6", "#3f9c8a", "#c47a9b", "#7d8b3a", "#5b6770", "#e07b39"];
@@ -76,27 +108,64 @@
     group.append(o);
   }
   controls.append(field(T.from, fromInput), field(T.to, toInput), field(T.groupBy, group));
-  const switchBox = el("div", "switch chart-currency");
-  switchBox.setAttribute("role", "group");
-  let cur = "USD";
-  const curButtons = ["USD", "COP"].map((c) => {
-    const b = raw("button", c);
-    b.type = "button";
-    b.dataset.chartCur = c;
-    b.addEventListener("click", () => {
-      cur = c;
-      safeRender();
+  /* Toggle group: buttons with aria-pressed. */
+  function toggles(cls, label, options, onPick) {
+    const box = el("div", "switch " + cls);
+    box.setAttribute("role", "group");
+    const lab = el("span", "visually-hidden", label);
+    lab.id = cls + "-label";
+    box.setAttribute("aria-labelledby", lab.id);
+    box.append(lab);
+    const buttons = options.map(([value, text, isRaw]) => {
+      const b = isRaw ? raw("button", text) : el("button", "", text);
+      b.type = "button";
+      b.dataset.value = value;
+      b.addEventListener("click", () => onPick(value));
+      box.append(b);
+      return b;
     });
-    switchBox.append(b);
-    return b;
-  });
+    return { box, buttons };
+  }
+  const mark = (buttons, value) => {
+    for (const b of buttons) {
+      b.classList.toggle("active", b.dataset.value === value);
+      b.setAttribute("aria-pressed", String(b.dataset.value === value));
+    }
+  };
+  let cur = "USD";
+  let mode = "owe";
+  let oweView = "month";
+  const curSwitch = toggles("chart-currency", T.currency, [["USD", "USD", true], ["COP", "COP", true]], (c) => ((cur = c), safeRender()));
+  const curButtons = curSwitch.buttons;
+  for (const b of curButtons) b.dataset.chartCur = b.dataset.value;
+  const switchBox = curSwitch.box;
+  const modeSwitch = toggles("chart-mode", T.modeLabel, [["owe", T.modeOwe], ["paid", T.modePaid]], (m) => ((mode = m), safeRender()));
+  for (const b of modeSwitch.buttons) b.dataset.chartMode = b.dataset.value;
+  const topBar = el("div", "chart-top");
+  topBar.append(switchBox, modeSwitch.box);
+
+  /* ---------- "Lo que debo" (1.4) ---------- */
+  const owePanel = el("div", "owe-panel");
+  owePanel.dataset.panel = "owe";
+  const viewSwitch = toggles("owe-views", T.viewLabel, [["month", T.viewMonth], ["total", T.viewTotal]], (v) => ((oweView = v), safeRender()));
+  for (const b of viewSwitch.buttons) b.dataset.oweView = b.dataset.value;
+  const oweIntro = el("p", "label owe-intro");
+  const oweOther = el("p", "owe-other");
+  const oweBody = el("div", "owe-body");
+  oweBody.setAttribute("aria-live", "polite");
+  owePanel.append(viewSwitch.box, oweIntro, oweOther, oweBody);
+
+  /* ---------- "Lo que pagué" (1.2) ---------- */
+  const paidPanel = el("div", "paid-panel");
+  paidPanel.dataset.panel = "paid";
   const msg = el("p", "label");
   msg.setAttribute("role", "status");
   const chartBox = el("div", "donut-box");
   const legend = el("ul", "donut-legend");
   const listTitle = el("h3", "", T.listTitle);
   const list = el("ul", "pay-list");
-  section.append(el("h2", "", T.title), el("p", "label", T.intro), controls, switchBox, msg, chartBox, legend, listTitle, list);
+  paidPanel.append(el("h3", "", T.title), el("p", "label", T.intro), controls, msg, chartBox, legend, listTitle, list);
+  section.append(el("h2", "", T.chartTitle), topBar, owePanel, paidPanel);
   view.append(section);
 
   function arc(cx, cy, r, a0, a1) {
@@ -105,9 +174,141 @@
       [x1, y1] = p(a1);
     return `M ${x0.toFixed(3)} ${y0.toFixed(3)} A ${r} ${r} 0 ${a1 - a0 > Math.PI ? 1 : 0} 1 ${x1.toFixed(3)} ${y1.toFixed(3)}`;
   }
+  function svgEl(tag, attrs) {
+    const n = document.createElementNS(SVG, tag);
+    for (const [k, v] of Object.entries(attrs || {})) n.setAttribute(k, String(v));
+    return n;
+  }
+  /* Ring segments: parts = [{ share (0..1), color }]. */
+  function ring(svg, parts) {
+    svg.append(svgEl("circle", { cx: 100, cy: 100, r: 70, fill: "none", stroke: "#e6ece6", "stroke-width": 28 }));
+    let a = 0;
+    for (const part of parts) {
+      if (part.share >= 0.9999) svg.append(svgEl("circle", { cx: 100, cy: 100, r: 70, fill: "none", stroke: part.color, "stroke-width": 28, class: "seg" }));
+      else if (part.share > 0) svg.append(svgEl("path", { d: arc(100, 100, 70, a, a + part.share * 2 * Math.PI), fill: "none", stroke: part.color, "stroke-width": 28, class: "seg" }));
+      a += part.share * 2 * Math.PI;
+    }
+  }
+  const OWE_COLORS = ["#146a55", "#d8a03a", "#4f7cac", "#7a5aa6", "#3f9c8a", "#c47a9b", "#7d8b3a", "#5b6770", "#e07b39", "#2f4858", "#9c7b2f", "#6b8fd6"];
+  function fmtRate(n) {
+    return new Intl.NumberFormat(en() ? "en-US" : "es-CO", { maximumFractionDigits: 2 }).format(n) + "%";
+  }
+  function goMethods() {
+    if (typeof window.MPDDNavigate === "function") window.MPDDNavigate("methods");
+    else {
+      const b = document.querySelector('.bottom-nav [data-target="methods"]');
+      if (b) b.click();
+    }
+  }
+  function button(text, cls, onClick) {
+    const b = el("button", cls, text);
+    b.type = "button";
+    b.addEventListener("click", onClick);
+    return b;
+  }
+  function renderOwe() {
+    mark(viewSwitch.buttons, oweView);
+    oweBody.replaceChildren();
+    oweOther.replaceChildren();
+    oweIntro.textContent = oweView === "month" ? T.oweIntroMonth : T.oweIntroTotal;
+    const planned = window.MPDDPlan && typeof window.MPDDPlan.planned === "function" ? window.MPDDPlan.planned() : {};
+    const r = S.owed(appDebts(), { currency: cur, view: oweView, today: today(), planned });
+    // Debts in the other currency: mentioned only, never converted.
+    for (const c of MPDDMoney.ordered(r.others)) {
+      const n = r.others[c];
+      oweOther.append(el("span", "", T.alsoHave), " ", raw("span", String(n)), " ", el("span", "", n === 1 ? T.debtIn : T.debtsIn), " ", raw("span", c));
+    }
+    oweOther.hidden = !oweOther.childNodes.length;
+    if (!r.count) {
+      const box = el("div", "owe-empty");
+      if (!Object.keys(r.others).length) box.append(el("p", "", T.noDebtsAtAll));
+      else {
+        const p = el("p", "");
+        p.append(el("span", "", T.noDebtsIn), " ", raw("span", cur), ".");
+        box.append(p);
+      }
+      const add = button(T.addDebt, "owe-add", () => window.MPDDApp && window.MPDDApp.openAdd());
+      add.disabled = !!(window.MPDDApp && window.MPDDApp.isLocked && window.MPDDApp.isLocked());
+      box.append(add);
+      oweBody.append(box);
+      return;
+    }
+    const unknownNote = () => {
+      const u = el("p", "label owe-unknown");
+      u.append(el("span", "", T.unknownMonth), " ", raw("strong", String(r.unknown)));
+      return u;
+    };
+    if (!r.items.length) {
+      const box = el("div", "owe-empty");
+      box.append(el("p", "", T.nothingThisMonth));
+      if (r.unknown) box.append(unknownNote());
+      box.append(button(T.seeTotal, "ghost", () => ((oweView = "total"), safeRender())));
+      oweBody.append(box);
+      return;
+    }
+    const colored = r.items.map((it, i) => Object.assign({ color: OWE_COLORS[i % OWE_COLORS.length] }, it));
+    // Text alternative for the donut, read through aria-labelledby (translatable text nodes).
+    const desc = el("p", "visually-hidden");
+    desc.id = "owe-donut-desc";
+    desc.append(el("span", "", T.donutOf), " ", el("span", "", oweView === "month" ? T.viewMonth : T.viewTotal), " ", raw("span", MPDDMoney.formatMoney(r.total, cur)), ". ");
+    for (const it of colored) desc.append(raw("span", it.name + ": " + MPDDMoney.formatMoney(it.amount, cur) + " (" + Math.round(it.share * 100) + "%). "));
+    const svg = svgEl("svg", { viewBox: "0 0 200 200", class: "donut owe-donut", role: "img", "aria-labelledby": desc.id });
+    ring(svg, colored);
+    const t1 = svgEl("text", { x: 100, y: 94, "text-anchor": "middle", class: "donut-label owe-center-label", "aria-hidden": "true" });
+    t1.textContent = oweView === "month" ? T.viewMonth : T.viewTotal;
+    const t2 = svgEl("text", { x: 100, y: 116, "text-anchor": "middle", class: "donut-total owe-center-total", "data-localized-output": "true", "aria-hidden": "true" });
+    t2.textContent = MPDDMoney.formatMoney(r.total, cur);
+    // Keep long totals (e.g. millions of COP) inside the ring.
+    const len = t2.textContent.length;
+    t2.style.fontSize = (len > 16 ? 9 : len > 13 ? 10.5 : 12) + "px";
+    svg.append(t1, t2);
+    const box = el("div", "donut-box");
+    box.append(svg);
+    const ul = el("ul", "owe-list");
+    for (const it of colored) {
+      const li = el("li", "owe-row" + (it.overdue ? " is-overdue" : ""));
+      li.dataset.debtId = it.debtId;
+      const sw = el("i", "swatch");
+      sw.style.background = it.color;
+      sw.setAttribute("aria-hidden", "true");
+      const main = el("div", "owe-main");
+      const name = el("div", "owe-name");
+      name.append(raw("strong", it.name));
+      if (it.debtId === r.mostExpensiveId) name.append(el("span", "owe-tag tag-pricey", T.tagPricey));
+      if (it.debtId === r.smallestId) name.append(el("span", "owe-tag tag-small", T.tagSmall));
+      if (it.overdue) name.append(el("span", "owe-tag tag-overdue", T.tagOverdue));
+      const meta = el("div", "label owe-rate");
+      if (it.rate !== null) meta.append(el("span", "", T.rate), " ", raw("span", fmtRate(it.rate)));
+      else meta.append(el("span", "", T.ratePending));
+      main.append(name, meta);
+      const nums = el("div", "owe-nums");
+      nums.append(raw("span", MPDDMoney.formatMoney(it.amount, cur), "owe-amount"), raw("span", Math.round(it.share * 100) + "%", "owe-pct"));
+      li.append(sw, main, nums);
+      ul.append(li);
+    }
+    oweBody.append(desc, box, ul);
+    if (r.unknown) oweBody.append(unknownNote());
+    // Tip: biggest debt vs the one that costs the most.
+    const tip = el("div", "owe-tip");
+    if (r.count >= 2 && r.biggest) {
+      const p = el("p", "owe-tip-text");
+      if (!r.priciest) p.append(el("span", "", T.tipBiggest), " ", raw("strong", r.biggest.name), ". ", el("span", "", T.tipNoRates));
+      else if (r.priciest.debtId === r.biggest.debtId) p.append(el("span", "", T.tipBiggestSame), " ", raw("strong", r.biggest.name), el("span", "", T.tipAlsoCostly));
+      else p.append(el("span", "", T.tipBiggest), " ", raw("strong", r.biggest.name), el("span", "", T.tipButCostly), " ", raw("strong", r.priciest.name), ".");
+      tip.append(p);
+    }
+    tip.append(button(T.compare, "ghost owe-compare", goMethods));
+    oweBody.append(tip);
+  }
   function render() {
-    for (const b of curButtons) b.classList.toggle("active", b.dataset.chartCur === cur);
-    for (const b of curButtons) b.setAttribute("aria-pressed", String(b.dataset.chartCur === cur));
+    mark(curButtons, cur);
+    mark(modeSwitch.buttons, mode);
+    owePanel.hidden = mode !== "owe";
+    paidPanel.hidden = mode !== "paid";
+    renderOwe();
+    renderPaid();
+  }
+  function renderPaid() {
     chartBox.replaceChildren();
     legend.replaceChildren();
     list.replaceChildren();
@@ -186,8 +387,9 @@
     t2.textContent = formatMoney(total, cur);
     t2.setAttribute("data-localized-output", "true");
     svg.append(t1, t2);
-    chartBox.append(svg);
-    if (!pays.length) msg.textContent = T.empty;
+    // Never draw an empty donut.
+    if (pays.length) chartBox.append(svg);
+    else msg.textContent = T.empty;
     // List: every payment of the period, each with its own currency (no sums across currencies).
     if (!all.length) list.append(el("li", "label", T.listEmpty));
     for (const p of all) {
@@ -211,11 +413,17 @@
   for (const i of [fromInput, toInput, group]) i.addEventListener("change", safeRender);
   document.addEventListener("mpdd:rendered", safeRender);
   document.addEventListener("deudas:languagechange", safeRender);
+  document.addEventListener("mpdd:planchange", safeRender);
   // Default currency for the chart: the one with payments in the period, else the app default.
   try {
     const pref = localStorage.getItem("deudas-currency-pref-v1");
     if (pref === "COP" || pref === "USD") cur = pref;
   } catch (_) {}
-  window.MPDDChart = { render: safeRender, setCurrency: (c) => ((cur = c === "COP" ? "COP" : "USD"), safeRender()), setRange: (f, t) => ((fromInput.value = f), (toInput.value = t), safeRender()) };
+  // If the preferred currency has no debts but the other one does, start with the other one.
+  try {
+    const owing = appDebts().filter((d) => Number(d.balance) > 0);
+    if (!owing.some((d) => d.currency === cur) && owing.some((d) => d.currency === (cur === "USD" ? "COP" : "USD"))) cur = cur === "USD" ? "COP" : "USD";
+  } catch (_) {}
+  window.MPDDChart = { render: safeRender, setMode: (m) => ((mode = m === "paid" ? "paid" : "owe"), safeRender()), setView: (v) => ((oweView = v === "total" ? "total" : "month"), safeRender()), setCurrency: (c) => ((cur = c === "COP" ? "COP" : "USD"), safeRender()), setRange: (f, t) => ((fromInput.value = f), (toInput.value = t), safeRender()) };
   safeRender();
 })();

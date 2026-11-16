@@ -10,19 +10,14 @@
 .st-pending{background:#eef0ef;color:#5d6862;border-color:#d9dfdb}
 .cal-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:12px 0}
 .cal-sum{background:#f6f9f5;border:1px solid #e1e9e1;border-radius:12px;padding:12px}.money-line{font-weight:800;font-size:18px}.muted{color:#7c8a82;font-weight:600}
-.cal-nav{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:8px 0}.cal-nav h3{margin:0;text-transform:capitalize}
+.cal-nav{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:8px 0}.cal-nav h3{margin:0}.cal-nav h3::first-letter{text-transform:uppercase}
 .cal-nav button{min-width:44px;min-height:40px;font-size:22px;line-height:1;border-radius:10px}
 .cal-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
 .cal-wd{text-align:center;font-size:11px;font-weight:700;color:#6d7d74;text-transform:capitalize;padding:2px 0}
 .cal-day{position:relative;aspect-ratio:1/1;min-height:38px;border-radius:10px;border:1px solid #dfe7df;background:#fff;color:#1d3a2c;font:inherit;font-weight:700;cursor:pointer;padding:0}
 .cal-day .dot{position:absolute;bottom:5px;left:50%;width:5px;height:5px;margin-left:-2.5px;border-radius:50%;background:currentColor;opacity:.6}
-.cal-day.c-paid{background:#d8f0e1;border-color:#9fd3b3;color:#145c37}.cal-day.c-late{background:#fbd9d3;border-color:#eea597;color:#93271a}
-.cal-day.c-today{background:#ffe2c2;border-color:#f0a35c;color:#8a4606}.cal-day.c-pending{background:#fff;border-color:#b9c4bd;border-style:dashed}
 .cal-day.selected{outline:3px solid #146a55;outline-offset:1px}.cal-day:focus-visible{outline:3px solid #146a55}
-.cal-legend{display:flex;flex-wrap:wrap;gap:8px 14px;margin:12px 0;font-size:12px;color:#536a5e}.legend-item{display:inline-flex;align-items:center;gap:6px}
 .swatch{display:inline-block;width:14px;height:14px;border-radius:4px;border:1px solid #cfd8d1}
-.swatch.c-paid{background:#d8f0e1;border-color:#9fd3b3}.swatch.c-late{background:#fbd9d3;border-color:#eea597}.swatch.c-today{background:#ffe2c2;border-color:#f0a35c}
-.swatch.c-pending{background:#fff;border-style:dashed;border-color:#9aa7a0}.swatch.c-none{background:#fff}
 .pay-list{list-style:none;margin:8px 0;padding:0}.pay-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid #e6ece6;flex-wrap:wrap}
 .pay-body{display:flex;flex-direction:column;flex:1;min-width:160px}.pay-amount{font-weight:800}
 .chart-currency{margin:10px 0}.donut-box{display:flex;justify-content:center;margin:8px 0}.donut{width:min(260px,80vw);height:auto}
@@ -34,3 +29,54 @@
 .csv-out a{display:inline-block;margin-top:6px;text-decoration:none}
 .update-banner{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(74px + env(safe-area-inset-bottom));z-index:60;background:#0b1f1d;color:#fff;padding:10px 14px;border-radius:12px;box-shadow:0 8px 24px #0004;display:flex;align-items:center;gap:6px;max-width:calc(100vw - 24px);flex-wrap:wrap;font-weight:700}
 .update-banner button{background:#d6edb2;color:#163c2b;border:0;border-radius:8px;padding:8px 12px;font:inherit;font-weight:800;cursor:pointer}
+
+/* 1.4 Calendario: días marcados, leyenda y "Próximos pagos".
+   Pendiente = naranja con punto; pagado = verde; vencido sin pagar = rojo;
+   hoy = solo borde oscuro, sin fondo; si hoy tiene pagos, su estado se ve en el punto o el número. */
+.cal-day.c-pending{background:#ffe2c2;border-color:#f0a35c;color:#8a4606}
+.cal-day.c-paid{background:#d8f0e1;border-color:#9fd3b3;color:#145c37}
+.cal-day.c-late{background:#fbd9d3;border-color:#eea597;color:#93271a}
+.cal-day.c-today{background:#fff;border:2px solid #173a2b;color:#173a2b}
+.cal-day.c-today .dot{opacity:1}
+.cal-day.c-today.c-pending .dot,.cal-day.c-today.c-pending .cal-count{background:#e07b18;color:#fff}
+.cal-day.c-today.c-paid .dot,.cal-day.c-today.c-paid .cal-count{background:#1f8a52;color:#fff}
+.cal-day.c-today.c-late .dot,.cal-day.c-today.c-late .cal-count{background:#c0392b;color:#fff}
+.cal-day .cal-count{position:absolute;bottom:3px;left:50%;transform:translateX(-50%);min-width:16px;height:16px;padding:0 4px;border-radius:999px;background:currentColor;font-size:10px;line-height:16px;font-weight:800;box-sizing:border-box}
+.cal-day.c-pending .cal-count{background:#e07b18;color:#fff}.cal-day.c-paid .cal-count{background:#1f8a52;color:#fff}.cal-day.c-late .cal-count{background:#c0392b;color:#fff}
+.cal-day .num{display:block;margin-top:-6px}
+.cal-legend{display:flex;flex-wrap:wrap;gap:8px 14px;margin:12px 0;padding:0;list-style:none;font-size:12px;color:#536a5e}.legend-item{display:inline-flex;align-items:center;gap:6px}
+.swatch{position:relative}
+.swatch.c-pending{background:#ffe2c2;border-color:#f0a35c}.swatch.c-paid{background:#d8f0e1;border-color:#9fd3b3}.swatch.c-late{background:#fbd9d3;border-color:#eea597}
+.swatch.c-today{background:#fff;border:2px solid #173a2b}.swatch.c-none{background:#fff}
+.swatch .sw-dot{position:absolute;left:50%;bottom:2px;width:4px;height:4px;margin-left:-2px;border-radius:50%;background:#8a4606}
+.swatch .sw-count{position:absolute;inset:0;font-size:9px;line-height:12px;text-align:center;font-weight:800;color:#8a4606;font-style:normal}
+.st-overdue{background:#fde8e5;color:#a8321f;border-color:#f3c3ba}
+.cal-upcoming{margin-top:18px}.cal-upcoming h3{margin:0 0 4px}
+.upcoming-list{list-style:none;margin:8px 0 0;padding:0}
+.upcoming-row{display:grid;grid-template-columns:minmax(96px,auto) 1fr auto;align-items:center;gap:10px;width:100%;text-align:left;background:#fff;border:0;border-top:1px solid #e6ece6;padding:10px 4px;font:inherit;color:#1d3a2c;cursor:pointer;min-height:48px}
+.upcoming-row:hover{background:#f6f9f5}.upcoming-row:focus-visible{outline:3px solid #146a55;outline-offset:-2px}
+.up-date{display:flex;flex-direction:column;font-size:12px}.up-day{font-weight:700}.up-day::first-letter{text-transform:uppercase}
+.up-when{color:#8a4606;font-weight:700}.up-when.is-today{color:#173a2b}.up-when.is-overdue{color:#a8321f}
+.upcoming-row.is-overdue{border-left:4px solid #c0392b;padding-left:8px}
+.up-body{display:flex;flex-direction:column;min-width:0}.up-name{overflow-wrap:anywhere}
+.up-amount{font-weight:800;text-align:right;white-space:nowrap;display:flex;flex-direction:column;align-items:flex-end;gap:2px}
+@media(max-width:420px){.upcoming-row{grid-template-columns:1fr auto}.up-date{grid-column:1/-1;flex-direction:row;gap:8px}}
+/* 1.4 Gráfico: "Lo que debo" / "Lo que pagué". */
+.chart-top{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:10px 0}
+.chart-top .switch,.owe-views{margin:0}
+.switch button[aria-pressed="true"]{font-weight:800}
+.owe-views{margin:6px 0 4px}
+.owe-other{font-size:12px;color:#6d7d74;margin:8px 0 0}
+.owe-empty{background:#f6f9f5;border:1px solid #e1e9e1;border-radius:12px;padding:16px;margin:12px 0;text-align:center}
+.owe-empty p{margin:0 0 10px}
+.owe-list{list-style:none;padding:0;margin:0 0 12px}
+.owe-row{display:grid;grid-template-columns:16px 1fr auto;gap:10px;align-items:center;padding:10px 0;border-top:1px solid #edf1ed}
+.owe-row.is-overdue{background:#fdf1ef;border-left:4px solid #c0392b;padding-left:8px;border-radius:6px}
+.owe-row.is-overdue .owe-name strong{color:#a8321f}
+.owe-main{min-width:0}.owe-name{display:flex;flex-wrap:wrap;align-items:center;gap:6px}.owe-name strong{overflow-wrap:anywhere}
+.owe-tag{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:800;white-space:nowrap}
+.tag-pricey{background:#fff1dd;color:#8a4606}.tag-small{background:#eef3ff;color:#3f5a8a}.tag-overdue{background:#fde8e5;color:#a8321f}
+.owe-nums{display:flex;flex-direction:column;align-items:flex-end}.owe-amount{font-weight:800;white-space:nowrap}.owe-pct{font-size:12px;color:#6d7d74}
+.owe-tip{background:#f1f7f0;border:1px solid #d9e8d8;border-radius:12px;padding:12px 14px;margin:12px 0}
+.owe-tip-text{margin:0 0 10px}
+@media(max-width:420px){.owe-row{grid-template-columns:14px 1fr}.owe-nums{grid-column:2;flex-direction:row;gap:8px;align-items:baseline}}
