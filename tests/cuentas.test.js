@@ -401,7 +401,7 @@ test("datos de la nube con HTML no se interpretan (sin inyección)", async () =>
   server.push(uid, [{ id: "d1", deleted: true, base: row2.updated_at }], {});
   await a.win.MPDDCloud.syncNow();
   await waitFor(() => a.debts().length === 0);
-  assert.equal(a.doc.querySelectorAll("img").length, 0);
+  assert.equal(a.doc.querySelectorAll("img:not(.brand img)").length, 0);
   assert.equal(a.win.__pwned, undefined);
   assert.ok(a.doc.getElementById("sync-notices").textContent.includes(evil), "se muestra como texto");
   a.close();

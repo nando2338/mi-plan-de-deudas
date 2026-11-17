@@ -394,7 +394,7 @@ test("sw.js: push muestra la notificación y el toque enfoca o abre el Calendari
   await fire("push", { data: { text: () => JSON.stringify(payload) } });
   assert.equal(shown[0].title, payload.title);
   assert.equal(shown[0].options.body, payload.body);
-  assert.equal(shown[0].options.icon, "/icon-192.png");
+  assert.equal(shown[0].options.icon, "/logo-192.png");
   assert.equal(shown[0].options.tag, payload.tag);
   assert.equal(shown[0].options.data.url, "/?vista=calendario");
   // Broken or foreign payloads still show a safe notification.

@@ -340,7 +340,7 @@ test("revisión: nombre con HTML no se ejecuta en el formulario de pago", async 
   assert.equal(h.doc.querySelectorAll("#fields img, #dialog img").length, 0);
   assert.ok(h.doc.querySelector("#fields label").textContent.includes(evil));
   h.win.MPDDApp.openPayment("u1", { dueDate: dayOf(5) });
-  assert.equal(h.doc.querySelectorAll("img").length, 0);
+  assert.equal(h.doc.querySelectorAll("img:not(.brand img)").length, 0);
   assert.equal(h.win.__pwned, undefined);
 });
 

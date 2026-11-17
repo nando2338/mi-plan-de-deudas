@@ -73,6 +73,12 @@ La función está en `supabase/functions/delete-account/index.ts` y **no se ha d
 9. **Publicar.** Sube `dist/` como siempre. Si cambias `config.js` después, no hace falta cambiar la versión del service worker: ese archivo se pide primero a la red.
 10. **Legal.** Completa los marcadores resaltados de `privacidad.html` y `terminos.html` (responsable, identificación, correo, región, retención) y haz que un abogado revise ambos textos antes de abrir las cuentas al público.
 
+## Versión 1.5
+
+- Nuevo logo (`dist/logo-simbolo.png`: barras descendentes, flecha dorada y monedas) en el cuadrito del encabezado, en lugar de la letra "J". Mismo tamaño y alineación (34 px en computador, 30 px en celulares angostos).
+- El mismo logo es el ícono de la app: favicon (`logo-32.png`), iPhone (`logo-180.png`) y manifest (`logo-192.png`, `logo-512.png` y `logo-maskable-512.png` con margen para el recorte de Android). Se borraron los íconos anteriores (`icon-*.png`, el león).
+- Volver a la 1.4: Netlify → *Deploys* → despliegue anterior → *Publish deploy*. No hay cambios en Supabase.
+
 ## Versión 1.4
 
 Novedades (sin anuncios, mismo diseño para celular y computador):
