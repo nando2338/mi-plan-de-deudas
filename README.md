@@ -73,6 +73,12 @@ La función está en `supabase/functions/delete-account/index.ts` y **no se ha d
 9. **Publicar.** Sube `dist/` como siempre. Si cambias `config.js` después, no hace falta cambiar la versión del service worker: ese archivo se pide primero a la red.
 10. **Legal.** Completa los marcadores resaltados de `privacidad.html` y `terminos.html` (responsable, identificación, correo, región, retención) y haz que un abogado revise ambos textos antes de abrir las cuentas al público.
 
+## Versión 1.6
+
+- **Ojo para ver la contraseña** en Iniciar sesión, Crear cuenta, "Repite la contraseña", recuperar y cambiar contraseña: oculta por defecto, botón accesible de 44 px ("Mostrar/Ocultar contraseña", también en inglés) que no tapa lo escrito.
+- **Tasas con hasta 3 decimales** (por ejemplo 4.875%): se escriben con coma o con punto, se guardan sin redondear y se muestran completas en la tarjeta, el gráfico, el plan y los cálculos. Las tasas ya guardadas no cambian.
+- Volver a la 1.5: Netlify → *Deploys* → despliegue anterior → *Publish deploy*. No hay cambios en Supabase.
+
 ## Versión 1.5
 
 - Nuevo logo (`dist/logo-simbolo.png`: barras descendentes, flecha dorada y monedas) en el cuadrito del encabezado, en lugar de la letra "J". Mismo tamaño y alineación (34 px en computador, 30 px en celulares angostos).
@@ -162,7 +168,7 @@ Requisitos: Node.js 20 o superior.
 ```bash
 cd tests
 npm install        # instala jsdom (solo para pruebas)
-npm test           # 109 pruebas automatizadas con DOM simulado
+npm test           # 118 pruebas automatizadas con DOM simulado
 npm run check      # node --check en todos los JS + recursos de HTML, service worker y manifiesto
 ```
 

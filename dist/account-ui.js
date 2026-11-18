@@ -166,7 +166,67 @@
   }
   function input(id, label, type, attrs = {}) {
     const i = el("input", Object.assign({ id, name: id, type }, attrs));
+    if (type === "password") return { wrap: el("div", { class: "field" }, el("label", { for: id, text: label }), passwordBox(i)), input: i };
     return { wrap: el("div", { class: "field" }, el("label", { for: id, text: label }), i), input: i };
+  }
+
+  /* 1.6: eye button to show or hide the password. Hidden by default; the label follows the
+     app language. Icons are drawn with DOM APIs (no innerHTML). */
+  const SVG = "http://www.w3.org/2000/svg";
+  function svgIcon(open) {
+    const svg = document.createElementNS(SVG, "svg");
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("width", "22");
+    svg.setAttribute("height", "22");
+    svg.setAttribute("aria-hidden", "true");
+    svg.setAttribute("focusable", "false");
+    const path = (d) => {
+      const p = document.createElementNS(SVG, "path");
+      p.setAttribute("d", d);
+      p.setAttribute("fill", "none");
+      p.setAttribute("stroke", "currentColor");
+      p.setAttribute("stroke-width", "2");
+      p.setAttribute("stroke-linecap", "round");
+      p.setAttribute("stroke-linejoin", "round");
+      svg.append(p);
+    };
+    path("M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z");
+    path("M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z");
+    if (!open) path("M4 4l16 16");
+    return svg;
+  }
+  const EYE = { es: ["Mostrar contraseña", "Ocultar contraseña"], en: ["Show password", "Hide password"] };
+  function passwordBox(i) {
+    const box = el("div", { class: "pw-reveal" });
+    const toggle = el("button", { type: "button", class: "pw-eye", "aria-controls": i.id, "aria-pressed": "false" });
+    const paint = () => {
+      const shown = i.type === "text";
+      const words = EYE[document.documentElement.lang === "en" ? "en" : "es"];
+      toggle.setAttribute("aria-label", shown ? words[1] : words[0]);
+      toggle.title = shown ? words[1] : words[0];
+      toggle.setAttribute("aria-pressed", shown ? "true" : "false");
+      // Open eye = "show"; crossed-out eye = the password is visible and the button hides it.
+      toggle.replaceChildren(svgIcon(!shown));
+    };
+    toggle.addEventListener("click", () => {
+      const pos = [i.selectionStart, i.selectionEnd];
+      i.type = i.type === "password" ? "text" : "password";
+      paint();
+      try {
+        i.focus({ preventScroll: true });
+        if (pos[0] !== null) i.setSelectionRange(pos[0], pos[1]);
+      } catch (_) {}
+    });
+    const onLang = () => {
+      // Form already replaced: drop the listener.
+      if (!toggle.isConnected && box.dataset.shown) return document.removeEventListener("deudas:languagechange", onLang);
+      if (toggle.isConnected) box.dataset.shown = "1";
+      paint();
+    };
+    document.addEventListener("deudas:languagechange", onLang);
+    paint();
+    box.append(i, toggle);
+    return box;
   }
   function message() {
     return el("p", { class: "account-msg", role: "status", "aria-live": "polite" });

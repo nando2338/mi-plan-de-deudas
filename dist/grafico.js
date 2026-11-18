@@ -191,7 +191,7 @@
   }
   const OWE_COLORS = ["#146a55", "#d8a03a", "#4f7cac", "#7a5aa6", "#3f9c8a", "#c47a9b", "#7d8b3a", "#5b6770", "#e07b39", "#2f4858", "#9c7b2f", "#6b8fd6"];
   function fmtRate(n) {
-    return new Intl.NumberFormat(en() ? "en-US" : "es-CO", { maximumFractionDigits: 2 }).format(n) + "%";
+    return MPDDMoney.formatPercent(n, en() ? "en" : "es");
   }
   function goMethods() {
     if (typeof window.MPDDNavigate === "function") window.MPDDNavigate("methods");

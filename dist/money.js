@@ -48,5 +48,23 @@
     const v = Number(n);
     return "$" + rate.format(Number.isFinite(v) ? v : 0) + " COP";
   }
-  return { CURRENCIES, formatMoney, formatRate, totalsByCurrency, ordered };
+  /* Interest rate typed by the user (1.6): accepts a point or a comma and up to 3 decimals,
+     with no rounding: "4.875", "4,875", "28.74 %" → 4.875 / 28.74. Empty → null; invalid
+     (letters, more than 3 decimals, outside 0–100) → NaN. */
+  function parsePercent(text) {
+    const s = String(text === null || text === undefined ? "" : text)
+      .trim()
+      .replace(/\s*%$/, "")
+      .replace(/\s+/g, "");
+    if (s === "") return null;
+    if (!/^\d{1,3}([.,]\d{1,3})?$/.test(s)) return NaN;
+    const n = Number(s.replace(",", "."));
+    return n >= 0 && n <= 100 ? n : NaN;
+  }
+  /* A rate as a percentage, without trimming its decimals (up to 3): 4.875% / 4,875%. */
+  function formatPercent(n, lang) {
+    const v = Number(n);
+    return new Intl.NumberFormat(lang === "en" ? "en-US" : "es-CO", { maximumFractionDigits: 3 }).format(Number.isFinite(v) ? v : 0) + "%";
+  }
+  return { CURRENCIES, formatMoney, formatRate, parsePercent, formatPercent, totalsByCurrency, ordered };
 });

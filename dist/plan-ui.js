@@ -691,7 +691,12 @@
       const rate = el("div", "pw-debt-line");
       if (missing.includes("rate")) {
         const [f, input] = amountInput("plan-rate-" + x.id, T.rateInput, v.rate ?? "", "USD");
-        input.max = "100";
+        // Text with a decimal keyboard: accepts a comma or a point and up to 3 decimals (4,875).
+        input.type = "text";
+        input.removeAttribute("min");
+        input.removeAttribute("step");
+        input.autocomplete = "off";
+        input.maxLength = 8;
         input.addEventListener("input", () => (d.edits[x.id] = Object.assign({}, d.edits[x.id], { rate: input.value })));
         rate.append(f);
       } else rate.append(el("span", "", T.rate), " ", raw("span", Number(x.rate) + "%"));
@@ -732,8 +737,8 @@
         const e = d.edits[x.id] || {};
         const p = { id: x.id };
         if (miss.includes("rate")) {
-          const r = Number(e.rate);
-          if (e.rate === undefined || e.rate === "" || !(r >= 0 && r <= 100)) return (err.textContent = T.s3Error);
+          const r = MPDDMoney.parsePercent(e.rate);
+          if (r === null || Number.isNaN(r)) return (err.textContent = T.s3Error);
           p.rate = r;
         }
         if (miss.includes("minPayment")) {
