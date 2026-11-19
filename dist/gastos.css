@@ -42,3 +42,11 @@
 .gf-cal-icon{margin-right:4px}
 @media(max-width:720px){.gf-section .formgrid,.gf-form .formgrid{grid-template-columns:1fr}.gf-summary .money-line{font-size:18px}}
 @media(max-width:420px){.gf-section .cardtop{flex-direction:column}.gf-section .balance{text-align:left}}
+
+/* 1.8: same colors as the debt highlight (resaltado.css), so red, yellow and blue mean the same in both sections. */
+.gf-card.gf-red{border-color:#b3261e;border-left-color:#b3261e;box-shadow:inset 4px 0 0 #b3261e}
+.gf-card.gf-yellow{border-color:#b7791f;border-left-color:#d69e2e;box-shadow:inset 4px 0 0 #d69e2e}
+.gf-card.gf-blue{border-color:#2b6cb0;border-left-color:#2b6cb0;box-shadow:inset 4px 0 0 #2b6cb0}
+.gf-due-red{background:#fde8e6;color:#8c1d18;border-color:#f3b8b2}
+.gf-due-yellow{background:#fff4d6;color:#6b4500;border-color:#efd28a}
+.gf-due-blue{background:#e6f0fb;color:#1d4f86;border-color:#b9d3f0}

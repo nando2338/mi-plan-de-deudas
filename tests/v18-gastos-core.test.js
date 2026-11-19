@@ -90,6 +90,10 @@ test("gastos: estados, pago por período y resaltado igual que las deudas", () =
   assert.equal(G.currentOccurrence(tax, today).dueDate, "2026-11-20");
   assert.equal(G.dueLevel("2026-11-20", today).level, "blue");
   assert.equal(G.unmarkPaid(g, "2026-11").payments.length, 0);
+  // Created on the 18th with payment day 10: the first one is next month's, not "Vencido".
+  const nuevo = base({ day: 10, createdAt: "2026-11-18" });
+  assert.equal(G.currentOccurrence(nuevo, today).dueDate, "2026-12-10");
+  assert.equal(G.currentOccurrence(nuevo, today).status, "pending");
 });
 
 test("gastos: validación, limpieza y filas de la base (ida y vuelta)", () => {

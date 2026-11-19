@@ -121,7 +121,9 @@
           month = (n % 12) + 1;
         if (!isDueMonth(g, year, month)) continue;
         const dueDate = monthDue(year, month, day);
-        if (dueDate < from || dueDate > to || dueDate.slice(0, 7) < start.slice(0, 7)) continue;
+        // Like the debts: payments before the day the expense was created do not exist
+        // (an expense added on the 18th with day 10 starts next month, it is not "overdue").
+        if (dueDate < from || dueDate > to || dueDate < start) continue;
         const period = dueDate.slice(0, 7);
         const pay = paymentFor(g, period);
         let status;
