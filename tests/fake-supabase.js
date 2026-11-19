@@ -73,7 +73,9 @@ class FakeServer {
     }
     if (op === "delete") {
       const id = (filters.find((f) => f[0] === "id") || [])[1];
+      const owner = (filters.find((f) => f[0] === "user_id") || [])[1];
       if (id !== undefined) mine.delete(id);
+      else if (owner === me) mine.clear();
       return { data: null, error: null };
     }
     return { data: [...mine.values()].map(clone), error: null };

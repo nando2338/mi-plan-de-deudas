@@ -286,7 +286,27 @@
     }
     return [...byId.values()];
   }
+  /* In-app reminders (1.8, like the debts): unpaid payments due exactly daysBefore days from
+     today, or today. key is unique per expense, due date and offset (no repeated notices). */
+  function reminders(list, { today, daysBefore }) {
+    const before = Number.isInteger(daysBefore) && daysBefore >= 0 ? daysBefore : 3;
+    if (!validDate(today)) return [];
+    const out = [];
+    for (const o of occurrences(list, { from: today, to: addDays(today, before), today })) {
+      if (o.payment) continue;
+      const days = daysBetween(today, o.dueDate);
+      if (days !== before && days !== 0) continue;
+      out.push({ key: "gasto|" + encodeURIComponent(o.gastoId) + "|" + o.dueDate + "|" + days, gastoId: o.gastoId, name: o.name, dueDate: o.dueDate, offsetDays: days, currency: o.currency, expected: o.expected });
+    }
+    return out;
+  }
+  function reminderMessage(e, lang) {
+    const time = e.offsetDays === 0 ? (lang === "en" ? "today" : "hoy") : lang === "en" ? "in " + e.offsetDays + " days" : "en " + e.offsetDays + " días";
+    return lang === "en" ? e.name + ": fixed expense due " + time + "." : e.name + ": gasto fijo vence " + time + ".";
+  }
   return {
+    reminders,
+    reminderMessage,
     KEY,
     CATS_KEY,
     CURRENCIES,

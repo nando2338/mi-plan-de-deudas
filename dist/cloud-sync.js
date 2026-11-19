@@ -468,6 +468,7 @@
         }
         const remote = settingsMap(pull);
         applySettings(remote, [...new Set([...remote.keys(), "deudas-budget-v1", "nando-recordatorios-v1"])]);
+        if (!automatic) gastosReplace = true; // 1.8: "use the cloud copy" also for fixed expenses
       } else if (choice === "local") {
         const t = nowISO();
         for (const r of pull.debts || []) {
@@ -778,6 +779,7 @@
         else rejected = true;
       }
     }
+    await gastosSync(); // 1.8: fixed expenses (never fails the debt sync)
     writeState(state);
     backoff = 0;
     lastPendingSig = pendingSignature(state);
@@ -794,7 +796,7 @@
   function wipeLocal() {
     if (locked()) return false;
     const keep = new Set(["deudas-lang-v1"]);
-    const exact = new Set([KEY, ...window.DebtBackupPlus.PREFS, "mpdd-foreground-notices-sent-v1", "mpdd-plan-draft-v1", "mpdd-account-prompts-v1", "mpdd-push-device-v1"]);
+    const exact = new Set([KEY, ...window.DebtBackupPlus.PREFS, "mpdd-foreground-notices-sent-v1", "mpdd-plan-draft-v1", "mpdd-account-prompts-v1", "mpdd-push-device-v1", "mpdd-gastos-fijos-v1", "mpdd-gastos-categorias-v1"]);
     const keys = [];
     for (let i = 0; i < ls.length; i++) keys.push(ls.key(i));
     for (const k of keys) {
@@ -832,6 +834,7 @@
     clearTimeout(scanTimer);
     try {
       if (running) await running;
+      if (gastosJob) await gastosJob; // 1.8
     } catch (_) {}
     try {
       // The plan lives in its own table (1.3): remove it first (own row via RLS).
@@ -842,7 +845,8 @@
         ls.removeItem(PLAN_CACHE);
       } catch (_) {}
       // 1.4: notification devices and settings (own rows via RLS).
-      for (const table of ["push_subscriptions", "push_settings"]) {
+      // 1.8: fixed expenses (gastos_fijos) too.
+      for (const table of ["push_subscriptions", "push_settings", "gastos_fijos"]) {
         const r = await c.from(table).delete().eq("user_id", status.userId);
         if (r && r.error) throw codeError(navigator.onLine === false ? "network" : "server");
       }
@@ -1105,6 +1109,94 @@
     return signOutWithoutPush(opts);
   };
   /* ================= fin 1.4 Notificaciones push ================= */
+
+  /* ================= 1.8 Gastos fijos (tabla gastos_fijos) =================
+     MPDDGastos (this device) is the working copy. Each sync pulls the user's own rows
+     (RLS), merges them with MPDDGastosCore.merge (last write wins by updatedAt; deletion
+     marks are kept so a deletion reaches every device), pushes what is newer here or missing
+     in the cloud, and saves the result here with replaceAll(list, "sync").
+     Offline or on any error nothing is shown: the next sync tries again. Never logs data. */
+  let gastosJob = null,
+    gastosAgain = false,
+    gastosTimer = null,
+    gastosReplace = false;
+  const gastosTime = (g) => Date.parse(g && g.updatedAt) || 0;
+  const gastosText = (list) => JSON.stringify(list.slice().sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)));
+  async function gastosUpsert(c, rows) {
+    if (!rows.length) return;
+    for (let i = 0; i < rows.length; i += 200) {
+      const chunk = rows.slice(i, i + 200);
+      const r = await c.from("gastos_fijos").upsert(chunk, { onConflict: "user_id,id" });
+      if (!r || !r.error) continue;
+      if (!BAD_DATA_CODES.has(String(r.error.code || ""))) throw codeError(navigator.onLine === false ? "network" : "server");
+      // One row refused by the database: send the others one by one.
+      for (const row of chunk) {
+        const one = await c.from("gastos_fijos").upsert(row, { onConflict: "user_id,id" });
+        if (one && one.error && !BAD_DATA_CODES.has(String(one.error.code || ""))) throw codeError("server");
+      }
+    }
+  }
+  async function gastosRun() {
+    const G = window.MPDDGastos,
+      GC = window.MPDDGastosCore;
+    if (!G || !GC || !status.userId || deleting) return;
+    const state = readState();
+    // Only once this device is linked to the account (after the first-sign-in choice).
+    if (!state || state.userId !== status.userId) return;
+    if (ls.getItem(JOURNAL) !== null) return;
+    if (navigator.onLine === false) return;
+    const uid = status.userId;
+    const c = await getClient();
+    const res = await c.from("gastos_fijos").select("*");
+    if (!res || res.error) throw codeError("server");
+    if (deleting || status.userId !== uid) return;
+    const remote = (Array.isArray(res.data) ? res.data : []).map(GC.fromRow).filter(Boolean);
+    const remoteById = new Map(remote.map((g) => [g.id, g]));
+    const local = G.all();
+    const replace = gastosReplace;
+    gastosReplace = false;
+    const merged = replace ? GC.sanitize(remote) : GC.merge(local, remote);
+    const push = merged.filter((g) => {
+      const r = remoteById.get(g.id);
+      return !r || gastosTime(g) > gastosTime(r);
+    });
+    await gastosUpsert(
+      c,
+      push.map((g) => Object.assign(GC.toRow(g), { user_id: uid })),
+    );
+    if (deleting || status.userId !== uid) return;
+    // Edited here while the request was in flight: merge again on the next run.
+    if (gastosText(G.all()) !== gastosText(local)) {
+      gastosAgain = true;
+      return;
+    }
+    if (gastosText(merged) !== gastosText(local)) G.replaceAll(merged, "sync");
+  }
+  function gastosSync() {
+    if (gastosJob) {
+      gastosAgain = true;
+      return gastosJob;
+    }
+    gastosJob = gastosRun()
+      .catch(() => {})
+      .finally(() => {
+        gastosJob = null;
+        if (gastosAgain) {
+          gastosAgain = false;
+          clearTimeout(gastosTimer);
+          gastosTimer = setTimeout(gastosSync, 800);
+        }
+      });
+    return gastosJob;
+  }
+  document.addEventListener("mpdd:gastoschange", (e) => {
+    const source = e && e.detail && e.detail.source;
+    if ((source !== "local" && source !== "restore") || !status.userId) return;
+    clearTimeout(gastosTimer);
+    gastosTimer = setTimeout(gastosSync, 1200);
+  });
+  api.syncGastos = () => gastosSync();
+  /* ================= fin 1.8 Gastos fijos ================= */
 
   /* ---------------- boot ---------------- */
   let bootTimer = null;
