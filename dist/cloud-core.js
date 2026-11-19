@@ -7,7 +7,8 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
   const KNOWN = ["id", "name", "balance", "initial", "limit", "rate", "currency", "due", "source", "history"];
-  const SETTINGS_KEYS = ["nando-recordatorios-v1", "deudas-lang-v1", "deudas-currency-pref-v1", "nando-deudas-sort-v1", "deudas-budget-v1"];
+  // 1.8: "mpdd-gastos-categorias-v1" = fixed-expense categories created by the user.
+  const SETTINGS_KEYS = ["nando-recordatorios-v1", "deudas-lang-v1", "deudas-currency-pref-v1", "nando-deudas-sort-v1", "deudas-budget-v1", "mpdd-gastos-categorias-v1"];
   const MAX = 90071992547409;
   const forbidden = new Set(["__proto__", "prototype", "constructor"]);
 

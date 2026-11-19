@@ -532,8 +532,13 @@
         continue;
       }
       // Reuse the backup validator so the cloud can never inject an invalid preference.
-      const fake = { getItem: (key) => (key === k ? value : null) };
-      window.DebtBackupPlus.readPrefs(fake);
+      if (k === "mpdd-gastos-categorias-v1") {
+        // 1.8: custom categories: list of { key: "c-…", label ≤ 30, icon from the list }.
+        if (!validCategories(value)) continue;
+      } else {
+        const fake = { getItem: (key) => (key === k ? value : null) };
+        window.DebtBackupPlus.readPrefs(fake);
+      }
       if (ls.getItem(k) !== value) {
         ls.setItem(k, value);
         if (ls.getItem(k) !== value) throw codeError("apply");
@@ -541,7 +546,21 @@
       }
     }
     if (changed) status.settingsChanged = true;
+    if (changed && keys.includes("mpdd-gastos-categorias-v1")) {
+      try {
+        document.dispatchEvent(new CustomEvent("mpdd:gastoschange", { detail: { source: "categories" } }));
+      } catch (_) {}
+    }
     return changed;
+  }
+  function validCategories(value) {
+    try {
+      const v = JSON.parse(value);
+      const icons = (window.MPDDGastosCore && window.MPDDGastosCore.CUSTOM_ICONS) || [];
+      return Array.isArray(v) && v.length <= 40 && v.every((c) => c && typeof c.key === "string" && /^c-[a-z0-9-]{1,36}$/.test(c.key) && typeof c.label === "string" && c.label.trim() && c.label.length <= 30 && icons.includes(c.icon));
+    } catch (_) {
+      return false;
+    }
   }
   function editingOpen() {
     const d = document.getElementById("dialog");

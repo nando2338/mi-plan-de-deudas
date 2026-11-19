@@ -546,3 +546,22 @@ test("sin sesión: los gastos fijos quedan solo en el dispositivo (sin red)", as
   assert.equal(h.net.createClient, 0, "ni siquiera se carga Supabase");
   eq(h.errors, []);
 });
+
+test("sincronización: las categorías propias llegan al otro dispositivo (y se validan)", async () => {
+  const server = new FakeServer();
+  const uid = server.addUser("a@ejemplo.test", "secreta123");
+  const a = await signedIn(server, uid);
+  const cat = a.win.MPDDGastos.addCategory("Internet", "📶");
+  a.win.MPDDGastos.save({ name: "Fibra", amount: 60, currency: "USD", frequency: "monthly", day: 3, category: cat.key });
+  await a.win.MPDDCloud.syncNow();
+  const b = await signedIn(server, uid);
+  await b.win.MPDDCloud.syncNow();
+  await waitFor(() => b.win.MPDDGastos.categories().length === 1, { label: "categoría bajada" });
+  eq(b.win.MPDDGastos.categoryInfo(cat.key, "es"), { key: cat.key, label: "Internet", icon: "📶", custom: true });
+  await waitFor(() => /Internet/.test(text(cardOf(b, b.win.MPDDGastos.list()[0].id))), { label: "la tarjeta muestra la categoría" });
+  // A forged value from the cloud (wrong icon) is not applied.
+  const before = b.win.localStorage.getItem(CATS);
+  server.settings.get(uid)[CATS] = { value: JSON.stringify([{ key: "c-x", label: "<img>", icon: "<script>" }]), updatedAt: new Date(Date.now() + 60000).toISOString() };
+  await b.win.MPDDCloud.syncNow();
+  assert.equal(b.win.localStorage.getItem(CATS), before, "valor inválido descartado");
+});

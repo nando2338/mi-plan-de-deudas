@@ -3,7 +3,7 @@
    so the client sync logic can be tested without any network. */
 "use strict";
 
-const ALLOWED = ["nando-recordatorios-v1", "deudas-lang-v1", "deudas-currency-pref-v1", "nando-deudas-sort-v1", "deudas-budget-v1"];
+const ALLOWED = ["nando-recordatorios-v1", "deudas-lang-v1", "deudas-currency-pref-v1", "nando-deudas-sort-v1", "deudas-budget-v1", "mpdd-gastos-categorias-v1"];
 const MAX = 90071992547409;
 const ms = (iso) => Date.parse(iso);
 const ts = (n) => new Date(n).toISOString();
