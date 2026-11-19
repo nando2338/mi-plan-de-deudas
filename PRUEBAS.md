@@ -1,5 +1,22 @@
 # Comprobaciones
 
+## Versión 1.8 (rama `version-1.8`, 19 de noviembre de 2026)
+
+Ejecutar: `cd tests && npm test` (185 pruebas) y `npm run check`. Pruebas Deno: `tests/push/push.deno.ts`, `tests/push/ecb.deno.ts`, `tests/trm/trm.deno.ts`.
+
+Archivos nuevos: `v18-gastos-core`, `v18-sugerencias-resaltado` (reglas de colores, formulario, límite, campo trampa, reintento), `v18-euro-plan` (euro y prueba de que cada pregunta del asistente aparece una sola vez), `v18-gastos-fijos`. **Aprobado.**
+
+Supabase, comprobado con transacciones revertidas:
+- `sugerencias`: solo insertar; nadie lee, edita ni borra desde la app; bloquea que alguien se haga pasar por otro usuario; tiene límite por hora.
+- `gastos_fijos`: cada usuario ve solo sus propias filas.
+- `exchange_rates_eur`: solo lectura.
+
+Funciones en vivo:
+- `enviar-recordatorios` v3 responde 200 sin fallos, y 401 con un secreto falso.
+- `tasa-euro` responde 200.
+
+Revisión visual en teléfono y escritorio, en español e inglés: sin errores ni desbordes.
+
 ## Versión 1.4 (rama `version-1.4`, 16 de noviembre de 2026)
 
 Ejecutar: `cd tests && npm test` (109 pruebas) y `npm run check`. Función `enviar-recordatorios`: `cd tests/push && deno run --allow-env --allow-read push.deno.ts`.
