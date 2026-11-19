@@ -60,6 +60,12 @@
     const v = Number(n);
     return "$" + rate.format(Number.isFinite(v) ? v : 0) + " COP";
   }
+  /* Euro rate (1.8): dollars per 1 euro with 4 decimals, Spanish style: US$1,0968. */
+  const eurRate = new Intl.NumberFormat("es-CO", { minimumFractionDigits: 4, maximumFractionDigits: 4 });
+  function formatEurRate(n) {
+    const v = Number(n);
+    return "US$" + eurRate.format(Number.isFinite(v) ? v : 0);
+  }
   /* Interest rate typed by the user (1.6): accepts a point or a comma and up to 3 decimals,
      with no rounding: "4.875", "4,875", "28.74 %" → 4.875 / 28.74. Empty → null; invalid
      (letters, more than 3 decimals, outside 0–100) → NaN. */
@@ -78,5 +84,5 @@
     const v = Number(n);
     return new Intl.NumberFormat(lang === "en" ? "en-US" : "es-CO", { maximumFractionDigits: 3 }).format(Number.isFinite(v) ? v : 0) + "%";
   }
-  return { CURRENCIES, formatMoney, formatRate, parsePercent, formatPercent, totalsByCurrency, ordered, decimals, roundTo };
+  return { CURRENCIES, formatMoney, formatRate, formatEurRate, parsePercent, formatPercent, totalsByCurrency, ordered, decimals, roundTo };
 });
