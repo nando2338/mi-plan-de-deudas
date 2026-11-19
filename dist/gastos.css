@@ -50,3 +50,7 @@
 .gf-due-red{background:#fde8e6;color:#8c1d18;border-color:#f3b8b2}
 .gf-due-yellow{background:#fff4d6;color:#6b4500;border-color:#efd28a}
 .gf-due-blue{background:#e6f0fb;color:#1d4f86;border-color:#b9d3f0}
+/* 1.8: in "Próximos pagos" a fixed expense reads on one line: icon, name and a small "Gasto fijo" tag. */
+.upcoming-row .up-body{display:block}
+.upcoming-row .up-body > *{display:inline}
+.upcoming-row .up-body .gf-tag{display:inline-block;vertical-align:1px}

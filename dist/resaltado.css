@@ -16,3 +16,5 @@
 .due-summary-arrow{margin-left:auto;font-size:18px;line-height:1}
 .due-summary[hidden],.due-order-note[hidden]{display:none}
 .due-order-note{margin:-6px 0 12px;font-size:12px}
+/* 1.8: as an inline box (not flex) the spaces between "Vencido hace", the number and "días" are kept. */
+.due-flag{display:inline-block;line-height:1.5}
