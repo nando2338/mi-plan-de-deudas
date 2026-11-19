@@ -2,8 +2,9 @@
    - Usa las deudas registradas (MPDDApp.debts) y el pago mensual del plan guardado
      (mínimos + extra, MPDDPlan.current). Sin plan, usa la suma de los mínimos.
    - El cálculo es el mismo motor del plan (MPDDPlanCore.simulate).
-   - Si hay deudas en dos monedas se convierte con la tasa del plan o con la TRM del día
-     (MPDDCloud.fetchTRM) y los valores convertidos se marcan como aproximados.
+   - Si hay deudas en varias monedas se convierte con la tasa del plan o con la del día
+     (TRM: MPDDCloud.fetchTRM; euro, 1.8: MPDDCloud.fetchEUR) y los valores convertidos se
+     marcan como aproximados.
    - Los datos del usuario solo se insertan con textContent. No escribe nada en el dispositivo. */
 (function () {
   "use strict";
@@ -85,6 +86,15 @@
     saving: "Guardando tu plan…",
     saved: "Listo: tu plan ahora usa este método.",
     saveError: "No se pudo guardar tu plan. Revisa tu conexión e inténtalo de nuevo.",
+    // 1.8: euro (European Central Bank, dollars per 1 euro).
+    eurPlan: "Tasa del euro usada en tu plan:",
+    eurToday: "Tasa del euro:",
+    eurLast: "Última tasa disponible:",
+    eurCustom: "Tasa del euro personalizada:",
+    eurSource: "Banco Central Europeo",
+    eurLoading: "Consultando la tasa del euro…",
+    eurMissing: "No pudimos obtener la tasa del euro. Solo comparamos tus deudas en",
+    bothMissing: "No pudimos obtener las tasas de cambio. Solo comparamos tus deudas en",
   };
   window.MPDDStrings = Object.assign(window.MPDDStrings || {}, { metodos: T });
 
@@ -138,7 +148,25 @@
   /* ---------------- state (memory only) ---------------- */
   const state = { cur: null, start: today(), extra: 0, motive: null, status: null };
   let trm = null,
-    trmState = "idle";
+    trmState = "idle",
+    eur = null,
+    eurState = "idle";
+  function loadEUR() {
+    const C = Cloud();
+    if (eurState !== "idle") return;
+    if (!C || !C.fetchEUR || C.status().config !== "ok") {
+      eurState = "failed";
+      return;
+    }
+    eurState = "loading";
+    C.fetchEUR()
+      .then((r) => {
+        eur = r && r.ok ? r : null;
+        eurState = eur ? "ready" : "failed";
+      })
+      .catch(() => (eurState = "failed"))
+      .then(() => refresh());
+  }
   function loadTRM() {
     const C = Cloud();
     if (trmState !== "idle") return;
@@ -171,27 +199,51 @@
     const all = appDebts().filter((d) => Number(d.balance) > 0 && Core.CURRENCIES.includes(d.currency));
     const plan = savedPlan();
     const cur = state.cur || defaultCurrency(plan, all);
-    const m = { cur, plan, empty: !all.length, skipped: [], debts: [], fx: null, fxInfo: null, fxMissing: false, approx: false };
+    const m = { cur, plan, empty: !all.length, skipped: [], debts: [], fx: null, fxInfo: null, fxInfos: [], fxMissing: false, fxMissingKeys: [], fxLoadingKeys: [], approx: false };
     if (m.empty) return m;
     const missing = Core.missingFields(all);
     m.skipped = all.filter((d) => missing[String(d.id)]);
     let usable = all.filter((d) => !missing[String(d.id)]);
     const planExtra = plan ? Math.max(0, Number(plan.extra) || 0) : 0;
-    const needFx = usable.some((d) => d.currency !== cur) || (plan && planExtra > 0 && plan.plan_currency !== cur);
-    if (needFx) {
-      if (plan && Core.validRate(Number(plan.fx_rate))) {
-        m.fx = Number(plan.fx_rate);
-        m.fxInfo = { kind: plan.fx_type === "personalizada" ? "custom" : "plan", rate: m.fx, fecha: plan.fx_date };
-      } else if (trm && trm.ok) {
-        m.fx = trm.valor;
-        m.fxInfo = { kind: trm.desactualizada ? "last" : "today", rate: trm.valor, fecha: trm.fecha };
+    // 1.8: the rates needed (TRM for COP, the ECB rate for EUR): the plan's, else today's.
+    const involved = new Set([cur, ...usable.map((d) => d.currency)]);
+    if (plan && planExtra > 0 && Core.CURRENCIES.includes(plan.plan_currency)) involved.add(plan.plan_currency);
+    const keys = involved.size > 1 ? ["cop", "eur"].filter((k) => involved.has(k === "cop" ? "COP" : "EUR")) : [];
+    const fx = { cop: null, eur: null };
+    for (const k of keys) {
+      const isEur = k === "eur";
+      const planRate = plan ? Number(isEur ? plan.eur_rate : plan.fx_rate) : NaN;
+      const live = isEur ? (eur && eur.ok ? { rate: eur.usdPorEur, fecha: eur.fecha, last: eur.desactualizada } : null) : trm && trm.ok ? { rate: trm.valor, fecha: trm.fecha, last: trm.desactualizada } : null;
+      if (plan && (isEur ? Core.validEurRate(planRate) : Core.validRate(planRate))) {
+        fx[k] = planRate;
+        m.fxInfos.push({ key: k, kind: (isEur ? plan.eur_type : plan.fx_type) === "personalizada" ? "custom" : "plan", rate: planRate, fecha: isEur ? plan.eur_date : plan.fx_date });
+      } else if (live) {
+        fx[k] = live.rate;
+        m.fxInfos.push({ key: k, kind: live.last ? "last" : "today", rate: live.rate, fecha: live.fecha });
       } else {
-        loadTRM();
-        m.fxLoading = trmState === "loading" || trmState === "idle";
-        m.fxMissing = !m.fxLoading;
-        usable = usable.filter((d) => d.currency === cur);
+        if (isEur) loadEUR();
+        else loadTRM();
+        const st = isEur ? eurState : trmState;
+        if (st === "loading" || st === "idle") {
+          m.fxLoading = true;
+          m.fxLoadingKeys.push(k);
+        } else m.fxMissingKeys.push(k);
       }
     }
+    if (keys.length) m.fx = fx;
+    m.fxInfo = m.fxInfos[0] || null;
+    m.fxMissing = !m.fxLoading && m.fxMissingKeys.length > 0;
+    const canConv = (c) => {
+      if (c === cur) return true;
+      try {
+        Core.convert(1, c, cur, fx);
+        return true;
+      } catch (_) {
+        return false;
+      }
+    };
+    usable = usable.filter((d) => canConv(d.currency));
+    m.shown = Core.CURRENCIES.filter((c) => c === cur || usable.some((d) => d.currency === c));
     const conv = (n, c) => (c === cur ? n : Core.convert(n, c, cur, m.fx));
     m.approx = !!m.fx && usable.some((d) => d.currency !== cur);
     m.debts = usable.map((d) => ({
@@ -207,7 +259,7 @@
     m.planExtra = 0;
     if (plan) {
       if (plan.plan_currency === cur) m.planExtra = planExtra;
-      else if (m.fx) {
+      else if (m.fx && canConv(plan.plan_currency)) {
         m.planExtra = Core.convert(planExtra, plan.plan_currency, cur, m.fx);
         if (planExtra > 0) m.approx = true;
       }
@@ -327,16 +379,21 @@
       n.append(p, btn(T.complete, "ghost", () => window.MPDDPlan && window.MPDDPlan.open()));
       src.append(n);
     }
-    if (m.fxInfo) {
-      const line = el("p", "label met-trm");
-      const key = { plan: T.trmPlan, today: T.trmToday, last: T.trmLast, custom: T.trmCustom }[m.fxInfo.kind];
-      line.append(el("strong", "", key), " ", raw("span", "1 USD = " + MPDDMoney.formatRate(m.fxInfo.rate)));
-      if (m.fxInfo.fecha && m.fxInfo.kind !== "custom") line.append(" · ", raw("span", longDate(String(m.fxInfo.fecha).slice(0, 10))));
-      src.append(line, el("p", "label small", T.trmNote));
-    } else if (m.fxLoading) src.append(el("p", "label", T.trmLoading));
+    for (const info of m.fxInfos) {
+      const isEur = info.key === "eur";
+      const line = el("p", "label met-trm" + (isEur ? " met-eur" : ""));
+      const key = isEur ? { plan: T.eurPlan, today: T.eurToday, last: T.eurLast, custom: T.eurCustom }[info.kind] : { plan: T.trmPlan, today: T.trmToday, last: T.trmLast, custom: T.trmCustom }[info.kind];
+      line.append(el("strong", "", key), " ", raw("span", isEur ? "1 EUR = " + MPDDMoney.formatEurRate(info.rate) : "1 USD = " + MPDDMoney.formatRate(info.rate)));
+      if (isEur && info.kind !== "custom") line.append(" · ", el("span", "", T.eurSource));
+      if (info.fecha && info.kind !== "custom") line.append(" · ", raw("span", longDate(String(info.fecha).slice(0, 10))));
+      src.append(line);
+    }
+    if (m.fxInfos.length) src.append(el("p", "label small", T.trmNote));
+    if (m.fxLoading) src.append(el("p", "label", m.fxLoadingKeys.includes("cop") ? T.trmLoading : T.eurLoading));
     else if (m.fxMissing) {
       const p = el("p", "notice met-trm-missing");
-      p.append(el("span", "", T.trmMissing), " ", raw("span", m.cur + "."));
+      const text = m.fxMissingKeys.length > 1 ? T.bothMissing : m.fxMissingKeys[0] === "eur" ? T.eurMissing : T.trmMissing;
+      p.append(el("span", "", text), " ", raw("span", m.shown.join(" / ") + "."));
       src.append(p);
     }
     root.append(src);
