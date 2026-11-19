@@ -26,6 +26,31 @@ class FakeServer {
     this.pushPublicKey = "BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U";
     this.pushCalls = [];
     this.pushFunctionStatus = null; // force a status for POST (e.g. 500)
+    // 1.8 sugerencias: insert-only table; user_id comes from the token (auth.uid()).
+    this.suggestions = []; // stored rows
+    this.suggestionCalls = []; // every request { url, method, headers, body }
+    this.suggestionReply = null; // null = normal; 0 = network error; number = HTTP status; "rate" = demasiadas_sugerencias
+  }
+  suggestion(url, init) {
+    const method = String(init.method || "GET").toUpperCase();
+    const headers = Object.assign({}, init.headers || {});
+    this.suggestionCalls.push({ url, method, headers, body: init.body === undefined ? undefined : String(init.body) });
+    const reply = (status, text) => Promise.resolve({ ok: status >= 200 && status < 300, status, text: async () => text, json: async () => (text ? JSON.parse(text) : null) });
+    if (this.offline || this.suggestionReply === 0) return Promise.reject(new TypeError("Failed to fetch"));
+    if (method !== "POST") return reply(401, JSON.stringify({ code: "42501", message: "permission denied for table sugerencias" }));
+    if (!headers.apikey) return reply(401, JSON.stringify({ message: "No API key found in request" }));
+    if (this.suggestionReply === "rate") return reply(400, JSON.stringify({ code: "P0001", message: "demasiadas_sugerencias" }));
+    if (typeof this.suggestionReply === "number") return reply(this.suggestionReply, JSON.stringify({ message: "error" }));
+    let row = null;
+    try {
+      row = JSON.parse(init.body);
+    } catch (_) {}
+    const uid = this.tokenUser(headers.Authorization);
+    if (!row || typeof row !== "object") return reply(400, JSON.stringify({ code: "22P02" }));
+    if ("user_id" in row) return reply(403, JSON.stringify({ code: "42501", message: "new row violates row-level security policy" }));
+    if (!["sugerencia", "error", "gusto"].includes(row.tipo) || typeof row.texto !== "string" || !row.texto.trim() || row.texto.length > 1000) return reply(400, JSON.stringify({ code: "23514" }));
+    this.suggestions.push(Object.assign({ user_id: uid }, row));
+    return reply(201, "");
   }
   tokenUser(token) {
     for (const u of this.users.values()) if (token === "Bearer fake-token-" + u.id) return u.id;

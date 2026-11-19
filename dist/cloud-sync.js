@@ -1048,6 +1048,42 @@
       return { ok: false, error: "network" };
     }
   };
+  /* 1.8 "Enviar sugerencia": the table is insert-only (never read back). user_id is never sent:
+     the database takes it from the token (auth.uid()) when signed in. Nothing is logged. */
+  api.sendSuggestion = async (s) => {
+    if (status.config !== "ok") return { ok: false, error: "config" };
+    if (navigator.onLine === false) return { ok: false, error: "network" };
+    const body = JSON.stringify({ tipo: s.tipo, texto: s.texto, contacto: s.contacto || null, idioma: s.idioma === "en" ? "en" : "es", version: String(s.version || "") });
+    let token = null;
+    if (status.userId) {
+      try {
+        const c = await getClient();
+        const { data } = await c.auth.getSession();
+        token = (data && data.session && data.session.access_token) || null;
+      } catch (_) {}
+    }
+    const post = (bearer) =>
+      fetch(String(CFG.supabaseUrl).replace(/\/$/, "") + "/rest/v1/sugerencias", {
+        method: "POST",
+        headers: { apikey: CFG.supabaseKey, "Content-Type": "application/json", Prefer: "return=minimal", Authorization: "Bearer " + bearer },
+        body,
+        cache: "no-store",
+      });
+    try {
+      let res = await post(token || CFG.supabaseKey);
+      // An expired session must not lose the suggestion: send it without the account.
+      if (res.status === 401 && token) res = await post(CFG.supabaseKey);
+      if (res.status === 201) return { ok: true };
+      let text = "";
+      try {
+        text = await res.text();
+      } catch (_) {}
+      if (/demasiadas_sugerencias/.test(text)) return { ok: false, error: "rateLimit" };
+      return { ok: false, error: "server" };
+    } catch (_) {
+      return { ok: false, error: "network" };
+    }
+  };
   /* Best effort, before signing out: forget this device so the account stops sending to it. */
   async function pushForgetDevice() {
     try {
