@@ -228,7 +228,7 @@ test("resaltado: rojo hoy y vencido, amarillo mañana, azul en 3 días, nada a 8
   assert.equal(level("hoy"), "red");
   assert.equal(label("hoy"), "Vence hoy");
   assert.equal(level("venc"), "red");
-  assert.equal(label("venc"), "Vencido");
+  assert.equal(label("venc"), "Vencido hace 3 días", "mismo texto que las deudas");
   assert.equal(level("man"), "yellow");
   assert.equal(label("man"), "Vence mañana");
   assert.equal(level("tres"), "blue");
@@ -564,4 +564,21 @@ test("sincronización: las categorías propias llegan al otro dispositivo (y se 
   server.settings.get(uid)[CATS] = { value: JSON.stringify([{ key: "c-x", label: "<img>", icon: "<script>" }]), updatedAt: new Date(Date.now() + 60000).toISOString() };
   await b.win.MPDDCloud.syncNow();
   assert.equal(b.win.localStorage.getItem(CATS), before, "valor inválido descartado");
+});
+
+test("sincronización: dos dispositivos crean una categoría a la vez y se conservan las dos", async () => {
+  const server = new FakeServer();
+  const uid = server.addUser("a@ejemplo.test", "secreta123");
+  const a = await signedIn(server, uid);
+  const b = await signedIn(server, uid);
+  a.win.MPDDGastos.addCategory("Internet", "📶");
+  b.win.MPDDGastos.addCategory("Seguro", "🛡️");
+  await a.win.MPDDCloud.syncNow();
+  await b.win.MPDDCloud.syncNow();
+  await b.win.MPDDCloud.syncNow();
+  await a.win.MPDDCloud.syncNow();
+  const names = (h) => h.win.MPDDGastos.categories().map((c) => c.label).sort();
+  await waitFor(() => names(a).length === 2 && names(b).length === 2, { label: "las dos categorías en ambos" });
+  eq(names(a), ["Internet", "Seguro"]);
+  eq(names(b), ["Internet", "Seguro"]);
 });

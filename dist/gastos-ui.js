@@ -136,6 +136,8 @@
   function dueLabel(level) {
     const box = el("span", "gf-due gf-due-" + level.level);
     if (level.kind === "soon") box.append(el("span", "", "Vence en"), " ", raw("span", String(level.days)), " ", el("span", "", "días"));
+    // Same text as the debt cards: "Vencido hace N días" (1.8).
+    else if (level.kind === "overdue") box.append(el("span", "", "Vencido hace"), " ", raw("span", String(-level.days)), " ", el("span", "", -level.days === 1 ? "día" : "días"));
     else box.append(el("span", "", DUE_LABEL[level.kind]));
     return box;
   }

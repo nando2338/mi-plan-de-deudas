@@ -470,6 +470,7 @@
         applySettings(remote, [...new Set([...remote.keys(), "deudas-budget-v1", "nando-recordatorios-v1"])]);
         if (!automatic) gastosReplace = true; // 1.8: "use the cloud copy" also for fixed expenses
       } else if (choice === "local") {
+        if (!automatic) gastosKeepLocal = true; // 1.8: "keep this device's copy" also for fixed expenses
         const t = nowISO();
         for (const r of pull.debts || []) {
           const v = r.deleted ? null : Core.toRemote(Core.fromRemote(r.id, r));
@@ -535,6 +536,14 @@
       if (k === "mpdd-gastos-categorias-v1") {
         // 1.8: custom categories: list of { key: "c-…", label ≤ 30, icon from the list }.
         if (!validCategories(value)) continue;
+        // Merge by key with this device's categories: two devices that create one at the same
+        // time keep both (the merged list is uploaded on the next sync).
+        const merged = mergeCategories(ls.getItem(k), value);
+        if (ls.getItem(k) !== merged) {
+          ls.setItem(k, merged);
+          changed = true;
+        }
+        continue;
       } else {
         const fake = { getItem: (key) => (key === k ? value : null) };
         window.DebtBackupPlus.readPrefs(fake);
@@ -552,6 +561,19 @@
       } catch (_) {}
     }
     return changed;
+  }
+  function mergeCategories(localValue, remoteValue) {
+    let a = [],
+      b = [];
+    try {
+      a = validCategories(localValue) ? JSON.parse(localValue) : [];
+    } catch (_) {}
+    try {
+      b = JSON.parse(remoteValue);
+    } catch (_) {}
+    const byKey = new Map();
+    for (const c of b.concat(a)) if (!byKey.has(c.key)) byKey.set(c.key, c);
+    return JSON.stringify([...byKey.values()].slice(-40));
   }
   function validCategories(value) {
     try {
@@ -1174,7 +1196,8 @@
   let gastosJob = null,
     gastosAgain = false,
     gastosTimer = null,
-    gastosReplace = false;
+    gastosReplace = false,
+    gastosKeepLocal = false;
   const gastosTime = (g) => Date.parse(g && g.updatedAt) || 0;
   const gastosText = (list) => JSON.stringify(list.slice().sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)));
   async function gastosUpsert(c, rows) {
@@ -1210,7 +1233,19 @@
     const local = G.all();
     const replace = gastosReplace;
     gastosReplace = false;
-    const merged = replace ? GC.sanitize(remote) : GC.merge(local, remote);
+    const keepLocal = gastosKeepLocal;
+    gastosKeepLocal = false;
+    let merged;
+    if (replace) merged = GC.sanitize(remote);
+    else if (keepLocal) {
+      // Like the debts: this device's copy replaces the cloud one. Whatever exists only in
+      // the cloud is marked as deleted, and everything gets a new date so it wins.
+      const now = new Date().toISOString();
+      const localIds = new Set(local.map((g) => g.id));
+      merged = local
+        .map((g) => Object.assign({}, g, { updatedAt: now }))
+        .concat(remote.filter((r) => !localIds.has(r.id) && !r.deleted).map((r) => ({ id: r.id, deleted: true, updatedAt: now })));
+    } else merged = GC.merge(local, remote);
     const push = merged.filter((g) => {
       const r = remoteById.get(g.id);
       return !r || gastosTime(g) > gastosTime(r);

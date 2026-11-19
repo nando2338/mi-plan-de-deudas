@@ -238,7 +238,12 @@
   /* Database row (table gastos_fijos) ↔ device object. */
   const FREQ_DB = { monthly: "mensual", quarterly: "trimestral", semiannual: "semestral", annual: "anual" };
   function toRow(g) {
-    if (g.deleted) return { id: g.id, borrado: g.updatedAt || new Date().toISOString(), actualizado: g.updatedAt || new Date().toISOString() };
+    // Deletion mark with ALL the columns (nulls and pagos: []): in a bulk upsert every row
+    // has the same columns and pagos (NOT NULL) never becomes null.
+    if (g.deleted) {
+      const t = g.updatedAt || new Date().toISOString();
+      return { id: g.id, nombre: null, monto: null, moneda: null, frecuencia: null, dia: null, mes: null, categoria: null, nota: null, pagos: [], creado_en: null, actualizado: t, borrado: t };
+    }
     return {
       id: g.id,
       nombre: g.name,

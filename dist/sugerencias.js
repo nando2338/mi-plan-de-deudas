@@ -29,6 +29,7 @@
     close: "Cerrar",
     thanks: "¡Gracias! Recibimos tu mensaje.",
     errEmpty: "Escribe tu mensaje.",
+    errShort: "Escribe un poco más: al menos 5 caracteres.",
     errLong: "El mensaje puede tener máximo 1000 caracteres.",
     errEmail: "Revisa el correo de contacto.",
     errNetwork: "No se pudo enviar. Revisa tu conexión e inténtalo de nuevo.",
@@ -117,7 +118,7 @@
   textField.append(textLabel, text, count);
 
   const emailField = el("div", { class: "field" });
-  const email = el("input", { id: "sug-contacto", name: "contacto", type: "email", inputmode: "email", autocomplete: "email", maxlength: "254", "aria-describedby": "sug-contacto-help" });
+  const email = el("input", { id: "sug-contacto", name: "contacto", type: "email", inputmode: "email", autocomplete: "email", maxlength: "200", "aria-describedby": "sug-contacto-help" });
   emailField.append(el("label", { for: "sug-contacto" }, T.contact), email, el("span", { id: "sug-contacto-help", class: "help" }, T.contactHelp));
 
   // Honeypot: invisible for people and assistive technology; bots tend to fill it.
@@ -159,7 +160,8 @@
     }
   }
   function validEmail(v) {
-    return v.length <= 254 && /^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$/.test(v);
+    // Same limits as the database: up to 200 characters.
+    return v.length <= 200 && /^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$/.test(v);
   }
   let sending = false;
   function setSending(on) {
@@ -200,6 +202,13 @@
     if (!texto) {
       text.setAttribute("aria-invalid", "true");
       say(T.errEmpty, "error");
+      text.focus();
+      return;
+    }
+    // The database asks for at least 5 characters: say it here instead of failing when sending.
+    if (texto.length < 5) {
+      text.setAttribute("aria-invalid", "true");
+      say(T.errShort, "error");
       text.focus();
       return;
     }
@@ -262,7 +271,7 @@
     if (d) {
       setTipo(typeof d.tipo === "string" ? d.tipo : "sugerencia");
       text.value = typeof d.texto === "string" ? d.texto.slice(0, MAX) : "";
-      email.value = typeof d.contacto === "string" ? d.contacto.slice(0, 254) : "";
+      email.value = typeof d.contacto === "string" ? d.contacto.slice(0, 200) : "";
     }
     updateCount();
     say(cloud() ? "" : T.errConfig, cloud() ? undefined : "error");

@@ -302,7 +302,7 @@ test("sugerencias: el campo trampa (honeypot) finge éxito y no envía nada", as
   const h = load({ storage: ES, config: "test", server });
   await sleep(30);
   await openSug(h);
-  type(h, "sug-texto", "spam");
+  type(h, "sug-texto", "spam spam");
   $(h, "sug-web").value = "http://spam.example";
   await send(h);
   assert.equal(msg(h), "¡Gracias! Recibimos tu mensaje.");
@@ -437,10 +437,22 @@ test("sugerencias: sin cuentas configuradas avisa y no hace ninguna petición", 
   await sleep(30);
   await openSug(h);
   assert.equal(msg(h), "Por ahora no es posible enviar sugerencias desde esta app.");
-  type(h, "sug-texto", "Hola");
+  type(h, "sug-texto", "Hola, una idea");
   await send(h);
   assert.equal(msg(h), "Por ahora no es posible enviar sugerencias desde esta app.");
   assert.equal(h.net.fetch.length, 0);
-  assert.equal($(h, "sug-texto").value, "Hola");
+  assert.equal($(h, "sug-texto").value, "Hola, una idea");
   assert.deepEqual(h.errors, []);
+});
+
+test("sugerencias: menos de 5 caracteres se avisa antes de enviar y el correo admite hasta 200 (igual que la base)", async () => {
+  const server = new FakeServer();
+  const h = load({ storage: ES, config: "test", server });
+  await sleep(30);
+  await openSug(h);
+  type(h, "sug-texto", "ok");
+  await send(h);
+  assert.equal(msg(h), "Escribe un poco más: al menos 5 caracteres.");
+  assert.equal(server.suggestionCalls.length, 0);
+  assert.equal($(h, "sug-contacto").getAttribute("maxlength"), "200");
 });

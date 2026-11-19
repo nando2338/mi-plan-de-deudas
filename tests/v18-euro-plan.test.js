@@ -408,11 +408,12 @@ test("paso 2 sin gastos fijos: se pide la lista una vez y se ofrece guardarla co
   assert.equal(w.step(), "Paso 3 de 5");
   assert.match(w.body(), /guardamos tus gastos como gastos fijos/);
   const list = h.win.MPDDGastos.list();
-  assert.deepEqual(JSON.parse(JSON.stringify(list.map((g) => [g.name, g.amount, g.currency, g.day, g.frequency]))), [["Vivienda", 1500000, "COP", 1, "monthly"], ["Comida y mercado", 800000, "COP", 1, "monthly"]], "solo los montos mayores que cero");
+  assert.deepEqual(JSON.parse(JSON.stringify(list.map((g) => [g.name, g.amount, g.currency, g.day, g.frequency]))), [["Vivienda", 1500000, "COP", 1, "monthly"]], "solo las cuentas (vivienda); la comida no se vuelve un gasto fijo");
   // Going back: the step now shows the fixed expenses, it does not ask again.
   w.click("‹ Atrás");
   assert.equal(h.doc.getElementById("plan-exp-0"), null);
-  assert.match(w.body(), /Tus gastos fijos del mes: \$2\.300\.000 COP/);
+  assert.match(w.body(), /Tus gastos fijos del mes: \$1\.500\.000 COP/);
+  assert.equal(h.doc.querySelector(".pw-body input").value, "800000", "la comida pasa a «Otros gastos del mes»");
   assert.doesNotMatch(w.body(), /aproximado/);
   w.click("Siguiente");
   w.click("Siguiente");
@@ -420,14 +421,14 @@ test("paso 2 sin gastos fijos: se pide la lista una vez y se ofrece guardarla co
   w.click("Siguiente");
   w.click("Empezar mi plan");
   await waitFor(() => server.plans.get(uid), { label: "plan guardado" });
-  assert.deepEqual(server.plans.get(uid).expenses, [{ key: "custom", label: "Gastos fijos", amount: 2300000, fijos: true }]);
+  assert.equal(server.plans.get(uid).expenses.map((e) => e.amount).reduce((a, b) => a + b, 0), 2300000, "el total del plan no cambia (1.500.000 fijos + 800.000 otros)");
   // Plan tab: how much of the income goes to fixed expenses.
-  await waitFor(() => /De tus ingresos, \$2\.300\.000 COP se van en gastos fijos\./.test(h.doc.getElementById("plan-root").textContent), { label: "parte de los ingresos" });
+  await waitFor(() => /De tus ingresos, \$1\.500\.000 COP se van en gastos fijos\./.test(h.doc.getElementById("plan-root").textContent), { label: "parte de los ingresos" });
   // "Ajustar mi plan": the fixed expenses are not asked again either.
   w.click("Ajustar mi plan");
   w.click("Siguiente");
   assert.equal(h.doc.getElementById("plan-exp-0"), null);
-  assert.match(w.body(), /Tus gastos fijos del mes: \$2\.300\.000 COP/);
+  assert.match(w.body(), /Tus gastos fijos del mes: \$1\.500\.000 COP/);
   // Not checked: nothing is saved.
   const h2 = load({ config: "test", server: new FakeServer(), storage: Object.assign({}, ES, { "deudas-currency-pref-v1": "COP", "nando-deudas-v1": JSON.stringify(store) }) });
   await sleep(60);

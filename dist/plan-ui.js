@@ -138,7 +138,7 @@
     s2OthersNote: "Solo lo que no está en tus gastos fijos.",
     s2StepTotal: "Total de gastos del mes:",
     s2SaveFixed: "Guardar estos gastos como gastos fijos",
-    s2SaveFixedNote: "Se guardan como pagos mensuales con día de pago 1. Puedes cambiar el día de pago en Inicio → Gastos fijos.",
+    s2SaveFixedNote: "Se guardan vivienda, servicios y los gastos que agregaste, como pagos mensuales con día de pago 1. Comida, transporte y otros no, porque cambian cada mes. Puedes cambiar el día de pago en Inicio → Gastos fijos.",
     s2SaveFixedError: "No se pudieron guardar tus gastos fijos. Inténtalo de nuevo.",
     s2Saved: "Listo: guardamos tus gastos como gastos fijos.",
     fixedName: "Gastos fijos",
@@ -147,6 +147,8 @@
     resumeFixed: "Tienes un plan sin terminar. Continúa cuando revises tus gastos fijos.",
   };
   window.MPDDStrings = Object.assign(window.MPDDStrings || {}, { plan: T });
+  /* 1.8: wizard items that are bills and can be saved as fixed expenses. */
+  const FIXED_LIKE = ["vivienda", "servicios", "custom"];
   const EXPENSES = [
     ["vivienda", "🏠"],
     ["comida", "🛒"],
@@ -246,10 +248,12 @@
     for (const e of exp) if (e && e.key === "custom" && !isFixedEntry(e)) d.expenses.push({ key: "custom", icon: "➕", label: String(e.label || "").slice(0, 60), amount: String(Number(e.amount) || "") });
     const fixedEntry = exp.find(isFixedEntry);
     d.savedFixed = fixedEntry ? Math.max(0, Number(fixedEntry.amount) || 0) : null;
-    // Other monthly expenses: the plan's own "otros" when it used fixed expenses; otherwise what
-    // is not usually a fixed bill (food, transport, other and custom items, not housing or utilities).
+    // Other monthly expenses: the plan's own "otros" when it already used fixed expenses.
+    // In a plan from before 1.8 we cannot know which items are now fixed expenses, so ALL
+    // its expenses go into "Otros" (better to subtract too much than to quietly drop rent or
+    // utilities); the user sees the amount and can lower it.
     const sumOf = (list) => list.reduce((s, e) => s + (Number(e.amount) || 0), 0);
-    const others = fixedEntry ? sumOf(exp.filter((e) => e && e.key === "otros")) : sumOf(d.expenses.filter((e) => ["comida", "transporte", "otros", "custom"].includes(e.key)));
+    const others = fixedEntry ? sumOf(exp.filter((e) => e && e.key === "otros")) : sumOf(d.expenses);
     d.others = others > 0 ? String(others) : "";
     d.extra = Number(p.extra) || 0;
     d.method = p.method === "snowball" ? "snowball" : "avalanche";
@@ -900,8 +904,10 @@
     body.append(err);
     nextButton(foot, T.next, () => {
       if (d.saveAsFixed && window.MPDDGastos) {
+        // Only items that are bills (housing, utilities and the ones the user named), not food,
+        // transport or "otros", which change every month and would show up as a bill due on the 1st.
         const items = d.expenses
-          .filter((e) => Number(e.amount) > 0)
+          .filter((e) => Number(e.amount) > 0 && FIXED_LIKE.includes(e.key))
           .map((e) => ({ name: (e.key === "custom" ? String(e.label || "").trim() || labelIn(T.otherExpense) : labelIn(T[e.key])).slice(0, 80), amount: Number(e.amount), currency: d.incomeCurrency, day: 1, frequency: "monthly", category: "" }));
         if (items.length) {
           let n = 0;
@@ -913,8 +919,10 @@
           if (!n) return (err.textContent = T.s2SaveFixedError);
           d.saveAsFixed = false;
           d.fixedNotice = true;
-          // The same amounts are now fixed expenses: nothing else to add this month.
-          d.others = "";
+          // What was saved is now fixed expenses; what was not (food, transport, other)
+          // goes to "Otros gastos del mes", so the step total does not change.
+          const rest = d.expenses.filter((e) => Number(e.amount) > 0 && !FIXED_LIKE.includes(e.key)).reduce((s, e) => s + Number(e.amount), 0);
+          d.others = rest > 0 ? String(rest) : "";
         }
       }
       go(3);
@@ -1432,8 +1440,16 @@
   if (Cloud()) Cloud().onChange(onCloud);
   document.addEventListener("deudas:languagechange", () => (wizard ? renderStep() : renderTab()));
   // 1.8: fixed expenses changed (Inicio, sync or this wizard): step 2 and the totals follow.
-  document.addEventListener("mpdd:gastoschange", () => {
-    if (wizard && draft) renderStep();
+  let lastFixedSig = null;
+  document.addEventListener("mpdd:gastoschange", (ev) => {
+    if (!wizard || !draft) return;
+    // A sync or a category change that does not change the totals does not redraw the step:
+    // on a phone it would close the keyboard mid-typing.
+    const sig = window.MPDDGastos ? JSON.stringify(window.MPDDGastos.monthlyTotals()) + window.MPDDGastos.list().length : "";
+    const source = ev && ev.detail && ev.detail.source;
+    if ((source === "sync" || source === "categories") && sig === lastFixedSig) return;
+    lastFixedSig = sig;
+    renderStep();
   });
   document.addEventListener("mpdd:rendered", () => {
     if (wizard && draft && draft.step === 3) renderStep();
