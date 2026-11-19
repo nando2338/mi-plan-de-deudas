@@ -16,7 +16,7 @@
 //  * It does not log personal or financial data. It does not send email.
 import { createClient } from "npm:@supabase/supabase-js@2.118.0";
 import { allowedEndpoint, generateVapidKeys, importVapidPrivate, sendPush } from "./webpush.ts";
-import { plannedFrom, remindersFor, texts, toAppDebts } from "./reglas.ts";
+import { plannedFrom, remindersFor, texts, toAppDebts, toAppGastos } from "./reglas.ts";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -133,12 +133,14 @@ async function sendForUser(st: any, now: Date) {
   const uid = st.user_id as string;
   const { data: subs } = await admin.from("push_subscriptions").select("id,endpoint,p256dh,auth").eq("user_id", uid);
   if (!subs?.length) return { sent, removed, counted };
-  const [{ data: debts }, { data: pays }, { data: plan }] = await Promise.all([
+  const [{ data: debts }, { data: pays }, { data: plan }, { data: gastos }] = await Promise.all([
     admin.from("debts").select("id,name,balance,currency,due,extra,deleted_at").eq("user_id", uid),
     admin.from("payments").select("debt_id,amount,paid_on,due_on").eq("user_id", uid),
     admin.from("debt_plans").select("items,plan_month").eq("user_id", uid).maybeSingle(),
+    // 1.8: fixed expenses (water, electricity, HOA, taxes…) remind the same way as debts.
+    admin.from("gastos_fijos").select("id,nombre,monto,moneda,frecuencia,dia,mes,categoria,nota,pagos,creado_en,actualizado,borrado").eq("user_id", uid),
   ]);
-  const list = remindersFor(st, now, toAppDebts(debts || [], pays || []), plannedFrom(plan?.items, plan?.plan_month));
+  const list = remindersFor(st, now, toAppDebts(debts || [], pays || []), plannedFrom(plan?.items, plan?.plan_month), toAppGastos(gastos || []));
   let live = subs as SubRow[];
   let newOnes = 0;
   for (const r of list) {

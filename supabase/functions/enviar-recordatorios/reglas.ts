@@ -3,11 +3,14 @@
 // so the server and the Calendario agree on dates, amounts and states.
 import "./schedule-core.js";
 import "./money.js";
+import "./gastos-core.js";
 
 // deno-lint-ignore no-explicit-any
 const S = (globalThis as any).MPDDSchedule;
 // deno-lint-ignore no-explicit-any
 const M = (globalThis as any).MPDDMoney;
+// deno-lint-ignore no-explicit-any
+const G = (globalThis as any).MPDDGastosCore;
 
 export interface Settings {
   enabled: boolean;
@@ -102,7 +105,7 @@ export function toAppDebts(debts: DebtRow[], payments: PaymentRow[]) {
         id: String(d.id),
         name: String(d.name || "").slice(0, 80),
         balance: Number(d.balance) || 0,
-        currency: d.currency === "COP" ? "COP" : "USD",
+        currency: ["USD", "COP", "EUR"].includes(d.currency) ? d.currency : "USD",
         due: d.due === null || d.due === undefined ? "" : String(d.due),
         minPayment: extra.minPayment ?? "",
         createdAt: typeof extra.createdAt === "string" ? extra.createdAt : undefined,
@@ -125,8 +128,23 @@ export function plannedFrom(items: PlanItem[] | null | undefined, planMonth: str
   return out;
 }
 
-/* Reminders that are due now (the database later filters out any already sent). */
-export function remindersFor(settings: Settings, now: Date, debts: ReturnType<typeof toAppDebts>, planned: Record<string, number>): Reminder[] {
+/* Fixed expenses (1.8): table rows → app objects (without deletion marks). */
+// deno-lint-ignore no-explicit-any
+export function toAppGastos(rows: any[]) {
+  return (rows || []).map((r) => G.fromRow(r)).filter((g: { deleted?: boolean } | null) => g && !g.deleted);
+}
+
+/* Reminders that are due now (the database later filters out any already sent).
+   Debts and fixed expenses (1.8) follow the same rules; an expense's id is
+   "g:<id>" in the record of sent reminders, so it never mixes with a debt's. */
+export function remindersFor(
+  settings: Settings,
+  now: Date,
+  debts: ReturnType<typeof toAppDebts>,
+  planned: Record<string, number>,
+  // deno-lint-ignore no-explicit-any
+  gastos: any[] = [],
+): Reminder[] {
   if (!settings || !settings.enabled) return [];
   const days = [1, 3, 7].includes(Number(settings.days_before)) ? Number(settings.days_before) : 1;
   const { date: today, time } = localNow(now, settings.tz);
@@ -136,7 +154,12 @@ export function remindersFor(settings: Settings, now: Date, debts: ReturnType<ty
   const sendTime = chosen.slice(0, 3) + String(Math.floor(Number(chosen.slice(3)) / 15) * 15).padStart(2, "0");
   if (time < sendTime) return [];
   const t = texts(settings.lang);
-  const list = S.installments(debts, { from: S.addDays(today, -7), to: S.addDays(today, days), today, planned });
+  const range = { from: S.addDays(today, -7), to: S.addDays(today, days), today };
+  const list = [
+    ...S.installments(debts, Object.assign({ planned }, range)),
+    // deno-lint-ignore no-explicit-any
+    ...G.occurrences(gastos, range).map((o: any) => Object.assign({}, o, { debtId: "g:" + o.gastoId })),
+  ].sort((a, b) => a.dueDate.localeCompare(b.dueDate) || a.name.localeCompare(b.name));
   const out: Reminder[] = [];
   for (const it of list) {
     if (it.payment) continue;
