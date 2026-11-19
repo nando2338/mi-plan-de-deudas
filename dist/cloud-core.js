@@ -89,7 +89,7 @@
     if (!v.name.trim() || v.name.length > 80) out.push("name");
     if (!money(v.balance) || !money(v.initial)) out.push("balance");
     if ((v.limit !== null && !money(v.limit)) || (v.rate !== null && !money(v.rate))) out.push("limitRate");
-    if (!["USD", "COP"].includes(v.currency)) out.push("currency");
+    if (!["USD", "COP", "EUR"].includes(v.currency)) out.push("currency");
     if (v.due !== null && !(Number.isInteger(v.due) && v.due >= 1 && v.due <= 31)) out.push("due");
     if (v.source !== null && v.source.length > 200) out.push("source");
     if (v.payments.length > 99999 || v.payments.some((p) => !(typeof p.amount === "number" && Number.isFinite(p.amount) && p.amount > 0 && p.amount <= MAX))) out.push("payments");

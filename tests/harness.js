@@ -69,6 +69,13 @@ function load(options = {}) {
           if (t.status === 0) return Promise.reject(new TypeError("Failed to fetch"));
           return Promise.resolve({ ok: t.status >= 200 && t.status < 300, status: t.status, json: async () => JSON.parse(JSON.stringify(t.body)) });
         }
+        // 1.8: the "tasa-euro" Edge Function (status 0 = no network).
+        if (options.server && /\/functions\/v1\/tasa-euro$/.test(String(a[0]))) {
+          options.server.eurCalls++;
+          const t = options.server.eur;
+          if (t.status === 0) return Promise.reject(new TypeError("Failed to fetch"));
+          return Promise.resolve({ ok: t.status >= 200 && t.status < 300, status: t.status, json: async () => JSON.parse(JSON.stringify(t.body)) });
+        }
         // 1.4: the "enviar-recordatorios" Edge Function (VAPID public key + test notification).
         if (options.server && /\/functions\/v1\/enviar-recordatorios$/.test(String(a[0]))) return Promise.resolve(options.server.pushFunction(a[1] || {}));
         return Promise.reject(new TypeError("network disabled in tests"));

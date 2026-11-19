@@ -898,6 +898,42 @@
       return cached();
     }
   };
+  /* 1.8: euro reference rate (dollars per 1 euro), European Central Bank, through the
+     "tasa-euro" function. Same as the TRM: 10-minute memo, and offline the last saved one
+     (marked desactualizada, with its date). */
+  let eurMemo = null;
+  const EUR_CACHE = "mpdd-eur-cache-v1";
+  api.fetchEUR = async ({ force = false } = {}) => {
+    if (status.config !== "ok") return { ok: false, error: "config" };
+    if (!force && eurMemo && Date.now() - eurMemo.at < 10 * 60 * 1000) return eurMemo.value;
+    const valid = (v, f) => typeof v === "number" && v >= 0.2 && v <= 5 && /^\d{4}-\d{2}-\d{2}$/.test(String(f));
+    const cached = () => {
+      try {
+        const c = JSON.parse(ls.getItem(EUR_CACHE) || "null");
+        if (c && valid(c.usdPorEur, c.fecha)) return { ok: true, usdPorEur: c.usdPorEur, fecha: c.fecha, fuente: String(c.fuente || ""), desactualizada: true };
+      } catch (_) {}
+      return { ok: false, error: "network" };
+    };
+    if (navigator.onLine === false) return cached();
+    try {
+      const ctrl = typeof AbortController === "function" ? new AbortController() : null;
+      const timer = ctrl ? setTimeout(() => ctrl.abort(), 12000) : null;
+      const res = await fetch(String(CFG.supabaseUrl).replace(/\/$/, "") + "/functions/v1/tasa-euro", { headers: { apikey: CFG.supabaseKey }, cache: "no-store", signal: ctrl ? ctrl.signal : undefined });
+      if (timer) clearTimeout(timer);
+      if (!res.ok) return cached();
+      const d = await res.json();
+      const usdPorEur = Number(d && d.usdPorEur);
+      if (!valid(usdPorEur, d && d.fecha)) return cached();
+      const value = { ok: true, usdPorEur, fecha: d.fecha, fuente: String(d.fuente || ""), desactualizada: !!d.desactualizada };
+      eurMemo = { at: Date.now(), value };
+      try {
+        ls.setItem(EUR_CACHE, JSON.stringify({ usdPorEur, fecha: d.fecha, fuente: value.fuente }));
+      } catch (_) {}
+      return value;
+    } catch (_) {
+      return cached();
+    }
+  };
   // Saved plan: Supabase table debt_plans (RLS: own row only). Requires a session.
   const PLAN_CACHE = "mpdd-cloud-plan-v1";
   api.loadPlan = async () => {

@@ -13,22 +13,52 @@
   else root.MPDDPlanCore = api;
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
-  const CURRENCIES = ["USD", "COP"];
+  const CURRENCIES = ["USD", "COP", "EUR"];
   const MAX_MONTHS = 600;
   const round = (n, c) => (c === "COP" ? Math.round(n) : Math.round(n * 100) / 100);
   const pad = (n) => String(n).padStart(2, "0");
 
+  /* TRM: pesos colombianos por 1 dólar. */
   function validRate(fx) {
     return typeof fx === "number" && Number.isFinite(fx) && fx >= 100 && fx <= 100000;
   }
-  /* Convierte entre USD y COP. fx = pesos colombianos por 1 dólar. */
+  /* Euro (1.8): dólares por 1 euro (tasa de referencia del Banco Central Europeo, ~1,05). */
+  function validEurRate(r) {
+    return typeof r === "number" && Number.isFinite(r) && r >= 0.2 && r <= 5;
+  }
+  /* fx can be a number (TRM, as in 1.3–1.7) or { cop: TRM, eur: dollars per euro }. */
+  function normalizeFx(fx) {
+    if (typeof fx === "number") return { cop: validRate(fx) ? fx : null, eur: null };
+    const o = fx && typeof fx === "object" ? fx : {};
+    return { cop: validRate(o.cop) ? o.cop : null, eur: validEurRate(o.eur) ? o.eur : null };
+  }
+  function missingFx(err, which) {
+    const e = new Error("Falta la tasa de cambio");
+    e.missingFx = which;
+    return e;
+  }
+  /* Converts between USD, COP and EUR, always through the dollar:
+     COP↔USD with the TRM; EUR↔USD with the ECB rate; EUR↔COP = EUR→USD→COP. */
   function convert(amount, from, to, fx) {
     const n = Number(amount) || 0;
     if (from === to) return n;
-    if (!validRate(fx)) throw new Error("Falta la tasa de cambio");
-    if (from === "USD" && to === "COP") return n * fx;
-    if (from === "COP" && to === "USD") return n / fx;
-    throw new Error("Moneda no soportada");
+    if (!CURRENCIES.includes(from) || !CURRENCIES.includes(to)) throw new Error("Moneda no soportada");
+    const r = normalizeFx(fx);
+    const need = [];
+    if ((from === "COP" || to === "COP") && !r.cop) need.push("cop");
+    if ((from === "EUR" || to === "EUR") && !r.eur) need.push("eur");
+    if (need.length) throw missingFx(null, need);
+    const usd = from === "USD" ? n : from === "COP" ? n / r.cop : n * r.eur;
+    return to === "USD" ? usd : to === "COP" ? usd * r.cop : usd / r.eur;
+  }
+  /* Which rates a plan needs: "cop" (TRM) and/or "eur" (ECB). */
+  function ratesNeeded(incomeCurrency, planCurrency, debts) {
+    const used = new Set(currenciesUsed(incomeCurrency, debts));
+    used.add(planCurrency);
+    const out = [];
+    if (used.size > 1 && used.has("COP")) out.push("cop");
+    if (used.size > 1 && used.has("EUR")) out.push("eur");
+    return out;
   }
   /* Monedas que aparecen entre los ingresos y las deudas con saldo. */
   function currenciesUsed(incomeCurrency, debts) {
@@ -168,8 +198,11 @@
     const incomeCurrency = input.incomeCurrency;
     const debts = (input.debts || []).filter((d) => Number(d.balance) > 0 && CURRENCIES.includes(d.currency));
     const fxUsed = needsFx(incomeCurrency, planCurrency, debts);
-    const fx = fxUsed ? input.fx : null;
-    if (fxUsed && !validRate(fx)) throw new Error("Falta la tasa de cambio");
+    // input.fx: TRM number (1.3–1.7) or { cop, eur } (1.8).
+    const rates = normalizeFx(input.fx);
+    const lacking = fxUsed ? ratesNeeded(incomeCurrency, planCurrency, debts).filter((k) => !rates[k]) : [];
+    if (lacking.length) throw missingFx(null, lacking);
+    const fx = fxUsed ? rates : null;
     const toPlan = (n, c) => convert(n, c, planCurrency, fx);
     const missing = missingFields(debts);
     if (Object.keys(missing).length) {
@@ -239,7 +272,8 @@
       planCurrency,
       incomeCurrency,
       fxUsed,
-      fx: fxUsed ? fx : null,
+      fx: fxUsed ? rates.cop : null,
+      fxEur: fxUsed ? rates.eur : null,
       month: ym,
       income: incomePlan,
       expenses: expensesPlan,
@@ -263,8 +297,9 @@
   }
   /* ¿Cambió la TRM más de 3 % frente a la usada? */
   function fxChanged(used, current, threshold = 0.03) {
-    if (!validRate(used) || !validRate(current)) return false;
+    // Works for the TRM and for the euro rate (any positive rate).
+    if (!(used > 0) || !(current > 0) || !Number.isFinite(used) || !Number.isFinite(current)) return false;
     return Math.abs(current - used) / used > threshold;
   }
-  return { CURRENCIES, MAX_MONTHS, round, validRate, convert, currenciesUsed, needsFx, missingFields, monthlyRate, owedThisMonth, simulate, buildPlan, fxChanged, monthAdd, dueDateIn };
+  return { CURRENCIES, MAX_MONTHS, round, validRate, validEurRate, normalizeFx, ratesNeeded, convert, currenciesUsed, needsFx, missingFields, monthlyRate, owedThisMonth, simulate, buildPlan, fxChanged, monthAdd, dueDateIn };
 });

@@ -17,8 +17,12 @@ class FakeServer {
     this.calls = [];
     this.functionDeployed = true;
     this.plans = new Map(); // uid -> debt_plans row (RLS: own row only)
+    this.gastos = new Map(); // uid -> Map(id -> gastos_fijos row) (RLS: own rows only)
     this.trm = { status: 200, body: { fecha: "2026-11-15", valor: 4000, fuente: "Superintendencia Financiera de Colombia", desactualizada: false } };
     this.trmCalls = 0;
+    // 1.8: "tasa-euro" function (European Central Bank, dollars per 1 euro).
+    this.eur = { status: 200, body: { fecha: "2026-11-15", usdPorEur: 1.05, fuente: "Banco Central Europeo", desactualizada: false } };
+    this.eurCalls = 0;
     this.seq = 0;
     // 1.4 push: tables push_subscriptions / push_settings and the "enviar-recordatorios" function.
     this.pushSubs = []; // rows { id, user_id, endpoint, p256dh, auth, user_agent, created_at, updated_at }
@@ -50,6 +54,29 @@ class FakeServer {
     const n = this.pushSubs.filter((r) => r.user_id === uid).length;
     if (!n) return reply(404, { error: "sin_suscripciones" });
     return reply(200, { ok: true, enviadas: n, borradas: 0 });
+  }
+  /* 1.8: table gastos_fijos. Checks like the real database: own rows, complete active expense,
+     valid currency and frequency. */
+  gastosTable(op, row, filters, me) {
+    const mine = this.gastos.get(me) || new Map();
+    this.gastos.set(me, mine);
+    const clone = (x) => JSON.parse(JSON.stringify(x));
+    if (op === "upsert") {
+      const rows = Array.isArray(row) ? row : [row];
+      for (const r of rows) {
+        if (r.user_id !== undefined && r.user_id !== me) return { data: null, error: { code: "42501", message: "new row violates row-level security" } };
+        const okActive = r.borrado || (r.nombre && r.monto > 0 && ["USD", "COP", "EUR"].includes(r.moneda) && ["mensual", "trimestral", "semestral", "anual"].includes(r.frecuencia) && r.dia >= 1 && r.dia <= 31 && (r.frecuencia === "mensual" || (r.mes >= 1 && r.mes <= 12)));
+        if (!okActive || typeof r.id !== "string" || !r.id) return { data: null, error: { code: "23514", message: "check violation" } };
+      }
+      for (const r of rows) mine.set(r.id, Object.assign(clone(r), { user_id: me }));
+      return { data: rows.map((r) => clone(mine.get(r.id))), error: null };
+    }
+    if (op === "delete") {
+      const id = (filters.find((f) => f[0] === "id") || [])[1];
+      if (id !== undefined) mine.delete(id);
+      return { data: null, error: null };
+    }
+    return { data: [...mine.values()].map(clone), error: null };
   }
   pushTable(table, op, row, filters, me) {
     const match = (r) => r.user_id === me && filters.every(([c, v]) => r[c] === v);
@@ -96,7 +123,7 @@ class FakeServer {
     if (!money(d.balance) || !money(d.initial)) return false;
     if (d.limit != null && !money(d.limit)) return false;
     if (d.rate != null && !money(d.rate)) return false;
-    if (!["USD", "COP"].includes(d.currency)) return false;
+    if (!["USD", "COP", "EUR"].includes(d.currency)) return false;
     if (d.due != null && !(Number.isInteger(d.due) && d.due >= 1 && d.due <= 31)) return false;
     for (const p of d.payments || []) if (!(p.amount > 0 && p.amount <= MAX)) return false;
     return true;
@@ -287,13 +314,18 @@ function createFakeLib(server, win) {
               if (!me) return { data: null, error: { code: "42501", message: "rls" } };
               return server.pushTable(table, q.op, q.row, q.filters, me);
             }
+            if (table === "gastos_fijos") {
+              const me = uid();
+              if (!me) return { data: null, error: { code: "42501", message: "rls" } };
+              return server.gastosTable(q.op, q.row, q.filters, me);
+            }
             if (table !== "debt_plans") return { data: null, error: { code: "42P01", message: "no table" } };
             const me = uid();
             if (!me) return { data: null, error: { code: "42501", message: "rls" } };
             if (q.op === "upsert") {
               if (q.row.user_id !== me) return { data: null, error: { code: "42501", message: "new row violates row-level security" } };
               const r = q.row;
-              const okCur = (c) => c === "USD" || c === "COP";
+              const okCur = (c) => c === "USD" || c === "COP" || c === "EUR";
               if (!okCur(r.income_currency) || !okCur(r.plan_currency) || !["avalanche", "snowball"].includes(r.method) || (r.fx_rate === null) !== (r.fx_type === null) || (r.fx_type !== null && !["oficial", "personalizada"].includes(r.fx_type)) || !(r.income >= 0) || !(r.extra >= 0)) return { data: null, error: { code: "23514", message: "check violation" } };
               const prev = server.plans.get(me);
               const row = Object.assign({}, r, { created_at: prev ? prev.created_at : new Date().toISOString(), updated_at: new Date().toISOString() });

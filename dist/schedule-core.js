@@ -131,7 +131,7 @@
     return out.sort((a, b) => b.date.localeCompare(a.date) || a.name.localeCompare(b.name));
   }
   function addTo(map, currency, n) {
-    if (currency !== "USD" && currency !== "COP") return;
+    if (currency !== "USD" && currency !== "COP" && currency !== "EUR") return;
     map[currency] = (map[currency] || 0) + n;
   }
   /* "Por pagar este mes" y "Pagado este mes", separados por moneda. */
@@ -204,7 +204,7 @@
      view "month": lo que falta pagar este mes (plan si existe, si no la cuota/mínimo).
      view "total": el saldo de cada deuda. */
   function owed(debts, { currency, view, today, planned }) {
-    const all = (debts || []).filter((d) => Number(d.balance) > 0 && (d.currency === "USD" || d.currency === "COP"));
+    const all = (debts || []).filter((d) => Number(d.balance) > 0 && (d.currency === "USD" || d.currency === "COP" || d.currency === "EUR"));
     const mine = all.filter((d) => d.currency === currency);
     const others = {};
     for (const d of all) if (d.currency !== currency) others[d.currency] = (others[d.currency] || 0) + 1;
