@@ -78,6 +78,8 @@ function load(options = {}) {
         }
         // 1.4: the "enviar-recordatorios" Edge Function (VAPID public key + test notification).
         if (options.server && /\/functions\/v1\/enviar-recordatorios$/.test(String(a[0]))) return Promise.resolve(options.server.pushFunction(a[1] || {}));
+        // 1.8: the insert-only "sugerencias" table (PostgREST).
+        if (options.server && /\/rest\/v1\/sugerencias$/.test(String(a[0]))) return options.server.suggestion(String(a[0]), a[1] || {});
         return Promise.reject(new TypeError("network disabled in tests"));
       };
       win.XMLHttpRequest = function () {

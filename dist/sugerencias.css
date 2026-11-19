@@ -1,0 +1,21 @@
+/* 1.8 "Enviar sugerencia": dialog and entry points (green theme, phone and desktop). */
+.sug-dialog textarea{border:1px solid #d6e1d7;border-radius:9px;padding:10px;width:100%;color:var(--ink);background:#fff;font:inherit;resize:vertical;min-height:110px}
+.sug-dialog input[type=email]{border:1px solid #d6e1d7;border-radius:9px;padding:10px;width:100%;color:var(--ink);background:#fff}
+.sug-dialog textarea:focus-visible,.sug-dialog input:focus-visible{outline:2px solid #146a55;outline-offset:1px}
+.sug-dialog [aria-invalid=true]{border-color:#ae4031}
+.sug-types{border:0;margin:12px 0 0;padding:0;min-width:0}
+.sug-legend{font-size:12px;font-weight:700;color:#536d5c;padding:0;margin-bottom:5px}
+.sug-seg{display:flex;flex-wrap:wrap;background:#e8ede6;border-radius:10px;padding:4px;gap:4px}
+.sug-seg input{position:absolute;opacity:0;width:1px;height:1px;margin:0;pointer-events:none}
+.sug-seg label{flex:1 1 auto;text-align:center;min-height:40px;display:flex;align-items:center;justify-content:center;padding:6px 12px;border-radius:7px;color:#4f6457;font-size:13px;font-weight:700;cursor:pointer}
+.sug-seg input:checked+label{background:#fff;color:#1d5a42;box-shadow:0 2px 8px #10251b14}
+.sug-seg input:focus-visible+label{outline:2px solid #146a55;outline-offset:1px}
+.sug-count{justify-self:end;font-size:12px;color:#526b5b}
+.sug-trap{position:absolute!important;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden}
+.sug-msg{min-height:1.2em;font-size:13px;margin:12px 0 0}
+.sug-msg.sug-ok{color:#146a55!important;font-weight:700}
+.sug-dialog .save:disabled{opacity:.6;cursor:wait}
+.link-button{border:0;background:transparent;padding:0;color:inherit;text-decoration:underline;font-size:inherit;cursor:pointer}
+.link-button:focus-visible{outline:2px solid #146a55;outline-offset:2px}
+#sug-open-more{margin-top:4px}
+@media(max-width:420px){.sug-seg{flex-direction:column}}
