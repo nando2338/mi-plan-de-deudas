@@ -2,7 +2,9 @@
    - Sin plan: tarjeta "Arma tu plan en 2 minutos". Con plan: el plan del mes y "Ajustar mi plan".
    - El plan se guarda en Supabase (tabla debt_plans) y requiere sesión; sin cuenta se puede
      armar y ver, y al tocar "Empezar mi plan" se pide iniciar sesión.
-   - La TRM solo se usa aquí, siempre a través de la función de servidor "trm".
+   - La TRM solo se usa aquí, siempre a través de la función de servidor "trm"; la tasa del
+     euro (1.8) a través de "tasa-euro" (Banco Central Europeo). Solo se piden las necesarias.
+   - Paso 2 (1.8): con gastos fijos (Inicio → Gastos fijos) no se vuelven a pedir.
    - Los datos del usuario solo se insertan con textContent. */
 (function () {
   "use strict";
@@ -115,8 +117,38 @@
     exitText: "Perderás lo que llevas.",
     exitStay: "Seguir en el asistente",
     methodSaved: "Listo: tu plan ahora usa este método.",
+    // 1.8: euro rate (European Central Bank, dollars per 1 euro).
+    eurChanged: "La tasa del euro cambió. ¿Actualizar tu plan?",
+    eurToday: "Tasa del euro:",
+    eurLast: "Última tasa disponible:",
+    eurUsed: "Tasa del euro usada en tu plan:",
+    eurCustom: "Tasa del euro personalizada:",
+    eurSource: "Banco Central Europeo",
+    eurOfficial: "Volver a la tasa oficial",
+    eurInput: "Tu tasa (dólares por 1 euro)",
+    eurBad: "Escribe una tasa válida, por ejemplo 1.08.",
+    eurMissing: "No pudimos obtener la tasa del euro. Escribe una tasa para continuar.",
+    eurLoading: "Consultando la tasa del euro…",
+    // 1.8: fixed expenses (Inicio → Gastos fijos) in step 2.
+    s2FixedTitle: "Tus gastos del mes",
+    s2Fixed: "Tus gastos fijos del mes:",
+    s2FixedNote: "Los tomamos de tus gastos fijos de Inicio. No tienes que escribirlos de nuevo.",
+    s2Edit: "Editar",
+    s2Others: "Otros gastos del mes (comida, transporte…)",
+    s2OthersNote: "Solo lo que no está en tus gastos fijos.",
+    s2StepTotal: "Total de gastos del mes:",
+    s2SaveFixed: "Guardar estos gastos como gastos fijos",
+    s2SaveFixedNote: "Se guardan vivienda, servicios y los gastos que agregaste, como pagos mensuales con día de pago 1. Comida, transporte y otros no, porque cambian cada mes. Puedes cambiar el día de pago en Inicio → Gastos fijos.",
+    s2SaveFixedError: "No se pudieron guardar tus gastos fijos. Inténtalo de nuevo.",
+    s2Saved: "Listo: guardamos tus gastos como gastos fijos.",
+    fixedName: "Gastos fijos",
+    tabFixedA: "De tus ingresos,",
+    tabFixedB: "se van en gastos fijos.",
+    resumeFixed: "Tienes un plan sin terminar. Continúa cuando revises tus gastos fijos.",
   };
   window.MPDDStrings = Object.assign(window.MPDDStrings || {}, { plan: T });
+  /* 1.8: wizard items that are bills and can be saved as fixed expenses. */
+  const FIXED_LIKE = ["vivienda", "servicios", "custom"];
   const EXPENSES = [
     ["vivienda", "🏠"],
     ["comida", "🛒"],
@@ -170,6 +202,8 @@
     loadState = "idle",
     trm = null,
     trmState = "idle",
+    eur = null,
+    eurState = "idle",
     wizard = null,
     draft = null,
     message = null;
@@ -178,7 +212,7 @@
     let cur = "COP";
     try {
       const pref = localStorage.getItem("deudas-currency-pref-v1");
-      if (pref === "USD" || pref === "COP") cur = pref;
+      if (Core.CURRENCIES.includes(pref)) cur = pref;
     } catch (_) {}
     return {
       step: 1,
@@ -186,27 +220,45 @@
       incomeCurrency: cur,
       planCurrency: null,
       expenses: EXPENSES.map(([key, icon]) => ({ key, icon, amount: "" })),
+      others: "",
+      saveAsFixed: false,
       extra: null,
       method: "avalanche",
       fx: null,
+      fxEur: null,
       edits: {},
       hadDebts: ds.length,
     };
   }
+  /* 1.8: the fixed-expenses total of a saved plan is stored as a "custom" item marked fijos
+     (older versions read it as one more expense); the other monthly expenses go in "otros". */
+  const isFixedEntry = (e) => !!(e && e.key === "custom" && e.fijos === true);
   function draftFromSaved(p) {
     const d = freshDraft();
     d.income = String(Number(p.income));
     d.incomeCurrency = p.income_currency;
     d.planCurrency = p.plan_currency;
     const exp = Array.isArray(p.expenses) ? p.expenses : [];
+    d.savedExpenses = exp.map((e) => ({ amount: Math.max(0, Number(e && e.amount) || 0) }));
+    d.savedRaw = exp.filter((e) => e && typeof e === "object").map((e) => Object.assign({}, e));
     d.expenses = EXPENSES.map(([key, icon]) => {
       const e = exp.find((x) => x && x.key === key);
       return { key, icon, amount: e && Number(e.amount) > 0 ? String(Number(e.amount)) : "" };
     });
-    for (const e of exp) if (e && e.key === "custom") d.expenses.push({ key: "custom", icon: "➕", label: String(e.label || "").slice(0, 60), amount: String(Number(e.amount) || "") });
+    for (const e of exp) if (e && e.key === "custom" && !isFixedEntry(e)) d.expenses.push({ key: "custom", icon: "➕", label: String(e.label || "").slice(0, 60), amount: String(Number(e.amount) || "") });
+    const fixedEntry = exp.find(isFixedEntry);
+    d.savedFixed = fixedEntry ? Math.max(0, Number(fixedEntry.amount) || 0) : null;
+    // Other monthly expenses: the plan's own "otros" when it already used fixed expenses.
+    // In a plan from before 1.8 we cannot know which items are now fixed expenses, so ALL
+    // its expenses go into "Otros" (better to subtract too much than to quietly drop rent or
+    // utilities); the user sees the amount and can lower it.
+    const sumOf = (list) => list.reduce((s, e) => s + (Number(e.amount) || 0), 0);
+    const others = fixedEntry ? sumOf(exp.filter((e) => e && e.key === "otros")) : sumOf(d.expenses);
+    d.others = others > 0 ? String(others) : "";
     d.extra = Number(p.extra) || 0;
     d.method = p.method === "snowball" ? "snowball" : "avalanche";
     if (p.fx_rate) d.fx = { rate: Number(p.fx_rate), type: p.fx_type === "personalizada" ? "personalizada" : "oficial", fecha: p.fx_date || null, desactualizada: false };
+    if (p.eur_rate) d.fxEur = { rate: Number(p.eur_rate), type: p.eur_type === "personalizada" ? "personalizada" : "oficial", fecha: p.eur_date || null, desactualizada: false };
     return d;
   }
   function planCurrencyOf(d) {
@@ -217,31 +269,116 @@
   function fxNeeded(d) {
     return Core.needsFx(d.incomeCurrency, planCurrencyOf(d), appDebts());
   }
-  function fxRate(d) {
-    if (d.fx && (d.fx.type === "personalizada" || d.useSavedFx)) return d.fx.rate;
-    if (trm && trm.ok) return trm.valor;
-    if (d.fx && d.fx.rate) return d.fx.rate;
+  /* Rates (1.8): "cop" = TRM (pesos per dollar), "eur" = ECB (dollars per euro). */
+  const RATES = {
+    cop: { slot: "fx", live: () => (trm && trm.ok ? { rate: trm.valor, fecha: trm.fecha, desactualizada: trm.desactualizada } : null), state: () => trmState },
+    eur: { slot: "fxEur", live: () => (eur && eur.ok ? { rate: eur.usdPorEur, fecha: eur.fecha, desactualizada: eur.desactualizada } : null), state: () => eurState },
+  };
+  /* Rates a set of currencies needs: every currency other than the dollar, when there is more than one. */
+  function keysFor(currencies) {
+    const set = new Set(currencies);
+    const out = [];
+    if (set.size > 1 && set.has("COP")) out.push("cop");
+    if (set.size > 1 && set.has("EUR")) out.push("eur");
+    return out;
+  }
+  /* Fixed expenses (Inicio → Gastos fijos), monthly total per currency. */
+  function fixedList() {
+    try {
+      return window.MPDDGastos ? window.MPDDGastos.list() : [];
+    } catch (_) {
+      return [];
+    }
+  }
+  const hasFixed = () => fixedList().length > 0;
+  function fixedTotals() {
+    try {
+      const t = window.MPDDGastos.monthlyTotals() || {};
+      const out = {};
+      for (const c of Core.CURRENCIES) if (Number(t[c]) > 0) out[c] = Number(t[c]);
+      return out;
+    } catch (_) {
+      return {};
+    }
+  }
+  /* Rates used by the draft: the plan's (income, plan and debt currencies) plus those needed to
+     bring the fixed expenses to the income currency. */
+  function ratesUsed(d) {
+    const keys = new Set(fxNeeded(d) ? Core.ratesNeeded(d.incomeCurrency, planCurrencyOf(d), appDebts()) : []);
+    if (!d.snapshot && hasFixed()) for (const k of keysFor([d.incomeCurrency, ...Object.keys(fixedTotals())])) keys.add(k);
+    return ["cop", "eur"].filter((k) => keys.has(k));
+  }
+  function rateOf(d, k) {
+    const s = d[RATES[k].slot];
+    const live = RATES[k].live();
+    if (s && (s.type === "personalizada" || d.useSavedFx)) return s.rate;
+    if (live) return live.rate;
+    if (s && s.rate) return s.rate;
     return null;
   }
-  function fxInfo(d) {
-    if (d.fx && d.useSavedFx) return { rate: d.fx.rate, type: d.fx.type, fecha: d.fx.fecha, desactualizada: false, saved: true };
-    if (d.fx && d.fx.type === "personalizada") return { rate: d.fx.rate, type: "personalizada", fecha: today(), desactualizada: false };
-    if (trm && trm.ok) return { rate: trm.valor, type: "oficial", fecha: trm.fecha, desactualizada: trm.desactualizada };
+  function infoOf(d, k) {
+    const s = d[RATES[k].slot];
+    const live = RATES[k].live();
+    if (s && d.useSavedFx) return { rate: s.rate, type: s.type, fecha: s.fecha, desactualizada: false, saved: true };
+    if (s && s.type === "personalizada") return { rate: s.rate, type: "personalizada", fecha: today(), desactualizada: false };
+    if (live) return { rate: live.rate, type: "oficial", fecha: live.fecha, desactualizada: live.desactualizada };
     return null;
+  }
+  const ratesObj = (d) => ({ cop: rateOf(d, "cop"), eur: rateOf(d, "eur") });
+  const fxRate = (d) => rateOf(d, "cop");
+  const missingRates = (d) => ratesUsed(d).filter((k) => !rateOf(d, k));
+  /* Converts, or null when a rate is missing. */
+  function tryConvert(n, from, to, fx) {
+    try {
+      return Core.convert(n, from, to, fx);
+    } catch (_) {
+      return null;
+    }
+  }
+  /* Step 2 with fixed expenses: their monthly total in the income currency. */
+  function fixedSummary(d) {
+    const totals = fixedTotals();
+    const fx = ratesObj(d);
+    let total = 0,
+      approx = false,
+      known = true;
+    for (const c of Object.keys(totals)) {
+      if (c === d.incomeCurrency) total += totals[c];
+      else {
+        const v = tryConvert(totals[c], c, d.incomeCurrency, fx);
+        if (v === null) known = false;
+        else total += v;
+        approx = true;
+      }
+    }
+    return { totals, total: Core.round(total, d.incomeCurrency), approx, known };
+  }
+  /* Expenses that go into the plan, in the income currency. */
+  function effectiveExpenses(d) {
+    if (d.snapshot) return d.savedExpenses || [];
+    if (hasFixed()) {
+      const f = fixedSummary(d);
+      if (!f.known) {
+        const e = new Error("Falta la tasa de cambio");
+        e.missingFx = missingRates(d);
+        throw e;
+      }
+      return [{ amount: f.total }, { amount: Math.max(0, Number(d.others) || 0) }];
+    }
+    return d.expenses.map((e) => ({ amount: Number(e.amount) || 0 }));
   }
   function debtsWithEdits(d) {
     return appDebts().map((x) => Object.assign({}, x, d.edits[x.id] || {}));
   }
   function compute(d, overrides = {}) {
-    const fxNeed = fxNeeded(d);
     return Core.buildPlan({
       income: Number(d.income) || 0,
       incomeCurrency: d.incomeCurrency,
       planCurrency: planCurrencyOf(d),
-      expenses: d.expenses.map((e) => ({ amount: Number(e.amount) || 0 })),
+      expenses: effectiveExpenses(d),
       extra: overrides.extra !== undefined ? overrides.extra : d.extra || 0,
       method: overrides.method || d.method,
-      fx: fxNeed ? fxRate(d) : null,
+      fx: ratesObj(d),
       debts: debtsWithEdits(d),
       today: today(),
     });
@@ -259,6 +396,29 @@
     trm = r && r.ok ? r : null;
     trmState = trm ? "ready" : "failed";
   }
+  async function ensureEUR(force) {
+    const C = Cloud();
+    if (!C || !C.fetchEUR || C.status().config !== "ok") {
+      eurState = "failed";
+      return;
+    }
+    if (eurState === "loading") return;
+    if (eur && !force) return;
+    eurState = "loading";
+    const r = await C.fetchEUR({ force });
+    eur = r && r.ok ? r : null;
+    eurState = eur ? "ready" : "failed";
+  }
+  /* Fetches only the rates the draft uses, then redraws the wizard. While drawing a step
+     (retry false) a rate that already failed is not asked again, so there is no loop. */
+  function ensureRates(d, retry) {
+    const list = ratesUsed(d);
+    const can = (st) => st === "idle" || (retry && st === "failed");
+    const jobs = [];
+    if (list.includes("cop") && !trm && can(trmState)) jobs.push(ensureTRM());
+    if (list.includes("eur") && !eur && can(eurState)) jobs.push(ensureEUR());
+    if (jobs.length) Promise.all(jobs).then(() => wizard && renderStep());
+  }
 
   /* ---------------- Plan tab ---------------- */
   function renderTab() {
@@ -273,9 +433,10 @@
       return;
     }
     const pd = pendingDraft();
-    if (pd && signedIn()) {
+    // A draft kept to edit the fixed expenses is offered with or without an account.
+    if (pd && (signedIn() || pd.reason === "gastos")) {
       const box = el("div", "notice plan-resume");
-      box.append(el("p", "", T.resumeText), btn(T.resume, "save", () => openWizard(null, pd)), " ", btn(T.discard, "ghost", () => (dropDraft(), renderTab())));
+      box.append(el("p", "", pd.reason === "gastos" ? T.resumeFixed : T.resumeText), btn(T.resume, "save", () => openWizard(null, pd)), " ", btn(T.discard, "ghost", () => (dropDraft(), renderTab())));
       root.append(box);
     }
     if (!saved) {
@@ -286,8 +447,7 @@
       root.append(card);
       return;
     }
-    const d = draftFromSaved(saved);
-    d.useSavedFx = true; // the Plan tab shows the rate used when the plan was made
+    const d = savedDraft();
     let result = null;
     try {
       result = compute(d);
@@ -295,25 +455,47 @@
       root.append(el("p", "notice", e && e.missing ? T.needsUpdate : T.fxNeedsUpdate), btn(T.adjust, "save", () => openWizard(saved)));
       return;
     }
-    // TRM changed more than 3% since the plan was made (official rate only).
-    if (saved.fx_type === "oficial" && trm && trm.ok && !trm.desactualizada && Core.fxChanged(Number(saved.fx_rate), trm.valor)) {
-      const box = el("div", "notice plan-trm-changed");
+    // A rate changed more than 3% since the plan was made (official rates only): TRM and euro.
+    for (const k of changedRates()) {
+      const box = el("div", "notice plan-trm-changed" + (k === "eur" ? " plan-eur-changed" : ""));
       box.setAttribute("role", "status");
-      box.append(el("strong", "", T.trmChanged), " ", btn(T.update, "save", () => updateWithNewTRM()));
+      box.append(el("strong", "", k === "eur" ? T.eurChanged : T.trmChanged), " ", btn(T.update, "save", () => updateWithNewRates()));
       root.append(box);
     }
     const sameMonth = String(saved.plan_month || "").slice(0, 7) === today().slice(0, 7);
     root.append(planView(result, sameMonth && Array.isArray(saved.items) ? saved.items : null, d, true));
+    // 1.8: how much of the income already goes to fixed expenses (as saved with the plan).
+    if (d.savedFixed > 0) {
+      const p = el("p", "label plan-fixed-share");
+      p.append(el("span", "", T.tabFixedA), " ", raw("strong", fmt(d.savedFixed, d.incomeCurrency)), " ", el("span", "", T.tabFixedB));
+      root.append(p);
+    }
     root.append(el("div", "actions"));
     root.lastChild.append(btn(T.adjust, "save", () => openWizard(saved)));
   }
-  async function updateWithNewTRM() {
+  /* The saved plan as it was made: same expenses and the rates used then. */
+  function savedDraft() {
     const d = draftFromSaved(saved);
-    d.fx = { rate: trm.valor, type: "oficial", fecha: trm.fecha };
+    d.useSavedFx = true; // the Plan tab shows the rate used when the plan was made
+    d.snapshot = true;
+    return d;
+  }
+  function changedRates() {
+    const out = [];
+    if (saved.fx_type === "oficial" && trm && trm.ok && !trm.desactualizada && Core.fxChanged(Number(saved.fx_rate), trm.valor)) out.push("cop");
+    if (saved.eur_type === "oficial" && eur && eur.ok && !eur.desactualizada && Core.fxChanged(Number(saved.eur_rate), eur.usdPorEur)) out.push("eur");
+    return out;
+  }
+  async function updateWithNewRates() {
+    const d = savedDraft();
+    const changed = changedRates();
+    if (changed.includes("cop")) d.fx = { rate: trm.valor, type: "oficial", fecha: trm.fecha };
+    if (changed.includes("eur")) d.fxEur = { rate: eur.usdPorEur, type: "oficial", fecha: eur.fecha };
     await savePlan(d, compute(d), true);
   }
 
   /* Plan of the month (step 5 and the Plan tab). */
+  const planFx = (r) => ({ cop: r.fx, eur: r.fxEur });
   function planView(r, savedItems, d, readOnly) {
     const box = el("div", "plan-view");
     const h = el("h2");
@@ -341,13 +523,13 @@
     tot.append(el("div", "label", T.total));
     for (const c of Core.CURRENCIES) if (totals[c] !== undefined) tot.append(raw("div", fmt(totals[c], c), "plan-total-line"));
     if (r.fxUsed) {
-      const approx = items.reduce((s, it) => s + (it.currency === r.planCurrency ? it.payment : Core.convert(it.payment, it.currency, r.planCurrency, r.fx)), 0);
+      const approx = items.reduce((s, it) => s + (it.currency === r.planCurrency ? it.payment : Core.convert(it.payment, it.currency, r.planCurrency, planFx(r))), 0);
       const line = el("div", "plan-approx");
       line.append(raw("span", "≈ " + fmt(approx, r.planCurrency)), " ", raw("span", "("), el("span", "", T.approx), raw("span", ")"));
       tot.append(line);
     }
     box.append(tot);
-    if (r.fxUsed && d) box.append(trmLine(d, readOnly));
+    if (d) for (const card of rateCards(d, readOnly)) box.append(card);
     return box;
   }
   function itemCard(it, r, highlight) {
@@ -355,7 +537,7 @@
     c.append(raw("strong", it.name, "plan-item-name"));
     const amt = el("div", "plan-item-amount");
     amt.append(raw("span", fmt(it.payment, it.currency)));
-    if (r.fxUsed && it.currency !== r.planCurrency) amt.append(" ", raw("small", "(≈ " + fmt(Core.convert(it.payment, it.currency, r.planCurrency, r.fx), r.planCurrency) + ")", "plan-approx-small"));
+    if (r.fxUsed && it.currency !== r.planCurrency) amt.append(" ", raw("small", "(≈ " + fmt(Core.convert(it.payment, it.currency, r.planCurrency, planFx(r)), r.planCurrency) + ")", "plan-approx-small"));
     c.append(amt);
     const meta = el("div", "label");
     if (it.dueDate) meta.append(el("span", "", T.dueOn), " ", raw("span", longDate(it.dueDate)));
@@ -363,12 +545,16 @@
     c.append(meta);
     return c;
   }
+  /* One card per rate the draft uses (TRM first, then the euro). */
+  function rateCards(d, readOnly) {
+    return ratesUsed(d).map((k) => (k === "eur" ? eurLine(d, readOnly) : trmLine(d, readOnly)));
+  }
   function trmLine(d, readOnly) {
-    const info = fxInfo(d) || (d.fx ? { rate: d.fx.rate, type: d.fx.type, fecha: d.fx.fecha } : null);
+    const info = infoOf(d, "cop") || (d.fx ? { rate: d.fx.rate, type: d.fx.type, fecha: d.fx.fecha } : null);
     const box = el("div", "trm-card");
     if (!info) {
       // No official TRM available (offline, cloud not configured or service down): ask for a rate.
-      if (!readOnly) box.append(trmControls(d), el("p", "label small", T.trmNote));
+      if (!readOnly) box.append(rateControls(d, "cop"), el("p", "label small", T.trmNote));
       return box;
     }
     const line = el("div", "trm-line");
@@ -377,43 +563,65 @@
     else if (info.desactualizada) line.append(el("strong", "", T.trmLast), " ", raw("span", info.fecha ? longDate(info.fecha) : "—"), " · ", raw("span", "1 USD = " + MPDDMoney.formatRate(info.rate)));
     else line.append(el("strong", "", T.trmToday), " ", raw("span", "1 USD = " + MPDDMoney.formatRate(info.rate)), " · ", el("span", "", T.trmSource), " · ", raw("span", info.fecha ? longDate(info.fecha) : "—"));
     box.append(line);
-    if (!readOnly) box.append(trmControls(d));
+    if (!readOnly) box.append(rateControls(d, "cop"));
     box.append(el("p", "label small", T.trmNote));
     return box;
   }
-  let trmEditing = false;
-  function trmControls(d) {
+  /* 1.8: euro card, same style as the TRM card. */
+  function eurLine(d, readOnly) {
+    const info = infoOf(d, "eur") || (d.fxEur ? { rate: d.fxEur.rate, type: d.fxEur.type, fecha: d.fxEur.fecha } : null);
+    const box = el("div", "trm-card eur-card");
+    if (!info) {
+      if (!readOnly) box.append(rateControls(d, "eur"), el("p", "label small", T.trmNote));
+      return box;
+    }
+    const rate = () => raw("span", "1 EUR = " + MPDDMoney.formatEurRate(info.rate));
+    const date = () => raw("span", info.fecha ? longDate(info.fecha) : "—");
+    const line = el("div", "trm-line");
+    if (info.saved && info.type === "oficial") line.append(el("strong", "", T.eurUsed), " ", rate(), " · ", el("span", "", T.eurSource), " · ", date());
+    else if (info.type === "personalizada") line.append(el("strong", "", T.eurCustom), " ", rate());
+    else if (info.desactualizada) line.append(el("strong", "", T.eurLast), " ", date(), " · ", rate(), " · ", el("span", "", T.eurSource));
+    else line.append(el("strong", "", T.eurToday), " ", rate(), " · ", el("span", "", T.eurSource), " · ", date());
+    box.append(line);
+    if (!readOnly) box.append(rateControls(d, "eur"));
+    box.append(el("p", "label small", T.trmNote));
+    return box;
+  }
+  let editing = { cop: false, eur: false };
+  function rateControls(d, k) {
+    const isEur = k === "eur";
+    const slot = RATES[k].slot;
     const wrap = el("div", "trm-controls");
-    const missing = !fxRate(d);
-    if (!trmEditing && !missing) {
-      wrap.append(btn(T.trmOther, "ghost", () => ((trmEditing = true), renderStep())));
-      if (d.fx && d.fx.type === "personalizada") wrap.append(" ", btn(T.trmOfficial, "ghost", () => ((d.fx = null), renderStep())));
+    const missing = !rateOf(d, k);
+    if (!editing[k] && !missing) {
+      wrap.append(btn(T.trmOther, "ghost" + (isEur ? " eur-other" : ""), () => ((editing[k] = true), renderStep())));
+      if (d[slot] && d[slot].type === "personalizada") wrap.append(" ", btn(isEur ? T.eurOfficial : T.trmOfficial, "ghost", () => ((d[slot] = null), renderStep())));
       return wrap;
     }
-    if (missing && trmState !== "loading") wrap.append(el("p", "error", T.trmMissing));
+    if (missing && RATES[k].state() !== "loading") wrap.append(el("p", "error", isEur ? T.eurMissing : T.trmMissing));
     const field = el("div", "field");
-    const label = el("label", "", T.trmInput);
+    const label = el("label", "", isEur ? T.eurInput : T.trmInput);
     const input = el("input");
     input.type = "number";
-    input.min = "100";
-    input.step = "0.01";
+    input.min = isEur ? "0.2" : "100";
+    input.step = isEur ? "0.0001" : "0.01";
     input.inputMode = "decimal";
-    input.id = "plan-fx";
-    input.value = d.fx && d.fx.type === "personalizada" ? String(d.fx.rate) : "";
+    input.id = isEur ? "plan-fx-eur" : "plan-fx";
+    input.value = d[slot] && d[slot].type === "personalizada" ? String(d[slot].rate) : "";
     label.htmlFor = input.id;
     field.append(label, input);
     const err = el("p", "error");
     err.setAttribute("role", "alert");
     wrap.append(
       field,
-      btn(T.trmUse, "save", () => {
-        const v = Number(input.value);
-        if (!Core.validRate(v)) {
-          err.textContent = T.trmBad;
+      btn(T.trmUse, "save" + (isEur ? " eur-use" : ""), () => {
+        const v = Number(String(input.value).replace(",", "."));
+        if (!(isEur ? Core.validEurRate(v) : Core.validRate(v))) {
+          err.textContent = isEur ? T.eurBad : T.trmBad;
           return;
         }
-        d.fx = { rate: Math.round(v * 100) / 100, type: "personalizada", fecha: today() };
-        trmEditing = false;
+        d[slot] = { rate: isEur ? Math.round(v * 10000) / 10000 : Math.round(v * 100) / 100, type: "personalizada", fecha: today() };
+        editing[k] = false;
         renderStep();
       }),
       err,
@@ -427,9 +635,12 @@
       wizard.remove();
       wizard = null;
     }
-    draft = fromDraft ? Object.assign(freshDraft(), fromDraft, { step: 5 }) : fromSaved ? draftFromSaved(fromSaved) : freshDraft();
+    // A resumed draft opens where it was left (step 2 after editing the fixed expenses, else step 5).
+    draft = fromDraft ? Object.assign(freshDraft(), fromDraft, { step: [1, 2, 3, 4, 5].includes(fromDraft.step) ? fromDraft.step : 5, reason: null, saveAsFixed: false }) : fromSaved ? draftFromSaved(fromSaved) : freshDraft();
+    draft.snapshot = false;
+    draft.useSavedFx = false;
     if (opts && (opts.method === "avalanche" || opts.method === "snowball")) draft.method = opts.method;
-    trmEditing = false;
+    editing = { cop: false, eur: false };
     message = null;
     wizard = el("div", "plan-wizard");
     wizard.setAttribute("role", "dialog");
@@ -437,7 +648,7 @@
     wizard.setAttribute("aria-labelledby", "plan-step-title");
     document.body.append(wizard);
     document.body.classList.add("plan-wizard-open");
-    if (fxNeeded(draft) || appDebts().some((x) => Number(x.balance) > 0 && x.currency !== draft.incomeCurrency)) ensureTRM().then(() => wizard && renderStep());
+    ensureRates(draft, true);
     renderStep();
   }
   /* Escape, wherever the focus is (also on <body>), while the wizard is open. Not when
@@ -510,7 +721,7 @@
   }
   function go(step) {
     draft.step = step;
-    trmEditing = false;
+    editing = { cop: false, eur: false };
     renderStep();
   }
   function renderStep() {
@@ -585,7 +796,7 @@
     body.append(el("p", "label", T.s1Currency), curSwitch(d.incomeCurrency, (c) => {
       d.incomeCurrency = c;
       if (!d.planChosen) d.planCurrency = c;
-      if (fxNeeded(d)) ensureTRM().then(() => wizard && renderStep());
+      ensureRates(d, true);
       renderStep();
     }));
     const [f, input] = amountInput("plan-income", T.s1Amount, d.income, d.incomeCurrency);
@@ -599,6 +810,7 @@
         d.planCurrency = c;
         d.planChosen = true;
         d.extra = null;
+        ensureRates(d, true);
         renderStep();
       }, T.s1PlanCurrency));
     }
@@ -613,11 +825,19 @@
         return;
       }
       d.income = input.value;
-      if (fxNeeded(d)) ensureTRM().then(() => wizard && renderStep());
+      ensureRates(d, true);
       go(2);
     });
   }
+  /* Step 2 (1.8): with fixed expenses (Inicio → Gastos fijos) it does not ask for them again: it
+     shows their monthly total and asks only for the other monthly expenses. Without them it asks
+     for the list once and offers to keep it as fixed expenses. */
+  const labelIn = (text) => (en() && window.DebtI18n ? window.DebtI18n.translateText(text, "en") : text);
+  function fixedKeys(d) {
+    return keysFor([d.incomeCurrency, ...Object.keys(fixedTotals())]);
+  }
   function step2(body, foot, d) {
+    if (hasFixed()) return step2Fixed(body, foot, d);
     body.append(el("h2", "", T.s2Title));
     const note = el("p", "label");
     note.append(el("span", "", T.s2Note), " ", raw("strong", d.incomeCurrency));
@@ -665,10 +885,107 @@
       renderStep();
     }), total);
     refresh();
-    nextButton(foot, T.next, () => go(3));
+    const err = el("p", "error");
+    err.setAttribute("role", "alert");
+    if (window.MPDDGastos) {
+      // Offer to keep these expenses as fixed expenses (monthly, day 1, income currency).
+      const offer = el("div", "pw-save-fixed");
+      const lab = el("label", "check-row");
+      const box = el("input");
+      box.type = "checkbox";
+      box.id = "plan-save-fixed";
+      box.checked = !!d.saveAsFixed;
+      box.addEventListener("change", () => (d.saveAsFixed = box.checked));
+      lab.htmlFor = box.id;
+      lab.append(box, " ", el("span", "", T.s2SaveFixed));
+      offer.append(lab, el("p", "label small", T.s2SaveFixedNote));
+      body.append(offer);
+    }
+    body.append(err);
+    nextButton(foot, T.next, () => {
+      if (d.saveAsFixed && window.MPDDGastos) {
+        // Only items that are bills (housing, utilities and the ones the user named), not food,
+        // transport or "otros", which change every month and would show up as a bill due on the 1st.
+        const items = d.expenses
+          .filter((e) => Number(e.amount) > 0 && FIXED_LIKE.includes(e.key))
+          .map((e) => ({ name: (e.key === "custom" ? String(e.label || "").trim() || labelIn(T.otherExpense) : labelIn(T[e.key])).slice(0, 80), amount: Number(e.amount), currency: d.incomeCurrency, day: 1, frequency: "monthly", category: "" }));
+        if (items.length) {
+          let n = 0;
+          try {
+            n = window.MPDDGastos.addMany(items);
+          } catch (_) {
+            n = 0;
+          }
+          if (!n) return (err.textContent = T.s2SaveFixedError);
+          d.saveAsFixed = false;
+          d.fixedNotice = true;
+          // What was saved is now fixed expenses; what was not (food, transport, other)
+          // goes to "Otros gastos del mes", so the step total does not change.
+          const rest = d.expenses.filter((e) => Number(e.amount) > 0 && !FIXED_LIKE.includes(e.key)).reduce((s, e) => s + Number(e.amount), 0);
+          d.others = rest > 0 ? String(rest) : "";
+        }
+      }
+      go(3);
+    });
+  }
+  function step2Fixed(body, foot, d) {
+    body.append(el("h2", "", T.s2FixedTitle));
+    const keys = fixedKeys(d);
+    if (keys.length) ensureRates(d);
+    const f = fixedSummary(d);
+    const line = el("div", "pw-total pw-fixed");
+    line.append(el("span", "", T.s2Fixed), " ", raw("strong", f.known ? fmt(f.total, d.incomeCurrency) : "—", "pw-fixed-total"));
+    if (f.approx) line.append(" ", el("span", "pill", T.approx));
+    line.append(" ", btn(T.s2Edit, "ghost pw-fixed-edit", () => {
+      keepDraft(d, { step: 2, reason: "gastos" });
+      closeWizard();
+      if (window.MPDDGastos) window.MPDDGastos.open();
+    }));
+    body.append(line);
+    // Several currencies (or another one): the breakdown, small, each in its own currency.
+    const curs = Core.CURRENCIES.filter((c) => f.totals[c] !== undefined);
+    if (curs.length > 1 || (curs.length === 1 && curs[0] !== d.incomeCurrency)) {
+      const small = el("p", "label small pw-fixed-breakdown");
+      curs.forEach((c, i) => {
+        if (i) small.append(" · ");
+        small.append(raw("span", fmt(f.totals[c], c)));
+      });
+      body.append(small);
+    }
+    body.append(el("p", "label", T.s2FixedNote));
+    for (const k of keys) {
+      if (RATES[k].state() === "loading" && !(d[RATES[k].slot] && d[RATES[k].slot].type === "personalizada")) body.append(el("p", "label", k === "eur" ? T.eurLoading : T.trmLoading));
+      body.append(k === "eur" ? eurLine(d, false) : trmLine(d, false));
+    }
+    const [of, input] = amountInput("plan-others", T.s2Others, d.others || "", d.incomeCurrency);
+    of.append(el("p", "label small", T.s2OthersNote));
+    body.append(of);
+    const total = el("div", "pw-total");
+    const totalAmount = raw("strong", "", "pw-step-total");
+    total.append(el("span", "", T.s2StepTotal), " ", totalAmount);
+    if (f.approx) total.append(" ", el("span", "pill", T.approx));
+    const refresh = () => (totalAmount.textContent = f.known ? fmt(f.total + Math.max(0, Number(d.others) || 0), d.incomeCurrency) : "—");
+    input.addEventListener("input", () => {
+      d.others = input.value;
+      refresh();
+    });
+    refresh();
+    const err = el("p", "error");
+    err.setAttribute("role", "alert");
+    body.append(total, err);
+    nextButton(foot, T.next, () => {
+      if (!fixedSummary(d).known) return (err.textContent = missingRates(d).includes("cop") ? T.trmMissing : T.eurMissing);
+      go(3);
+    });
   }
   function step3(body, foot, d) {
     body.append(el("h2", "", T.s3Title));
+    if (d.fixedNotice) {
+      const ok = el("p", "notice pw-fixed-saved", T.s2Saved);
+      ok.setAttribute("role", "status");
+      body.append(ok);
+      d.fixedNotice = false;
+    }
     const list = appDebts().filter((x) => Number(x.balance) > 0);
     if (!list.length) {
       body.append(el("p", "notice", T.noDebts), btn(T.addDebt, "save", () => window.MPDDApp && window.MPDDApp.openAdd()));
@@ -678,8 +995,9 @@
     body.append(el("p", "label", T.s3Note));
     const planCur = planCurrencyOf(d);
     const fxNeed = fxNeeded(d);
-    if (fxNeed && !fxRate(d) && trmState !== "loading" && trmState !== "failed") ensureTRM().then(() => wizard && draft && draft.step === 3 && renderStep());
-    const fx = fxNeed ? fxRate(d) : null;
+    const keys = ratesUsed(d);
+    if (missingRates(d).length) ensureRates(d);
+    const fx = ratesObj(d);
     const rows = el("div", "pw-debts");
     let totalMin = 0,
       totalKnown = true;
@@ -708,11 +1026,13 @@
         min.append(f);
       } else {
         min.append(el("span", "", T.minimum), " ", raw("strong", fmt(x.minPayment, x.currency)));
-        if (fxNeed && fx && x.currency !== planCur) min.append(" ", raw("small", "≈ " + fmt(Core.convert(x.minPayment, x.currency, planCur, fx), planCur), "plan-approx-small"));
+        const eq = fxNeed && x.currency !== planCur ? tryConvert(x.minPayment, x.currency, planCur, fx) : null;
+        if (eq !== null) min.append(" ", raw("small", "≈ " + fmt(eq, planCur), "plan-approx-small"));
       }
       const m = Number(v.minPayment);
-      if (m > 0) totalMin += x.currency === planCur ? m : fx ? Core.convert(m, x.currency, planCur, fx) : 0;
-      if (!(m > 0) || (x.currency !== planCur && !fx)) totalKnown = false;
+      const mPlan = x.currency === planCur ? m : tryConvert(m, x.currency, planCur, fx);
+      if (m > 0 && mPlan !== null) totalMin += mPlan;
+      if (!(m > 0) || mPlan === null) totalKnown = false;
       row.append(rate, min);
       rows.append(row);
     }
@@ -721,9 +1041,9 @@
     tot.append(el("span", "", T.s3Total), " ", raw("strong", totalKnown ? fmt(totalMin, planCur) : "—"));
     if (fxNeed) tot.append(" ", el("span", "pill", T.approx));
     body.append(tot);
-    if (fxNeed) {
-      if (trmState === "loading" && !(d.fx && d.fx.type === "personalizada")) body.append(el("p", "label", T.trmLoading));
-      body.append(trmLine(d, false));
+    for (const k of keys) {
+      if (RATES[k].state() === "loading" && !(d[RATES[k].slot] && d[RATES[k].slot].type === "personalizada")) body.append(el("p", "label", k === "eur" ? T.eurLoading : T.trmLoading));
+      body.append(k === "eur" ? eurLine(d, false) : trmLine(d, false));
     }
     const link = btn(T.missingDebt, "linklike", () => window.MPDDApp && window.MPDDApp.openAdd());
     const err = el("p", "error");
@@ -748,7 +1068,8 @@
         }
         patches.push(p);
       }
-      if (fxNeed && !fxRate(d)) return (err.textContent = T.trmMissing);
+      const lacking = missingRates(d);
+      if (lacking.length) return (err.textContent = lacking.includes("cop") ? T.trmMissing : T.eurMissing);
       if (patches.length && !(window.MPDDApp && window.MPDDApp.updateDebts(patches))) return (err.textContent = T.s3SaveError);
       d.edits = {};
       go(4);
@@ -759,7 +1080,7 @@
     try {
       r = compute(d, { extra: d.extra === null ? 0 : d.extra });
     } catch (e) {
-      body.append(el("h2", "", T.s4Free), el("p", "error", e.missing ? T.s3Error : T.trmMissing));
+      body.append(el("h2", "", T.s4Free), el("p", "error", e.missing ? T.s3Error : e.missingFx && !e.missingFx.includes("cop") ? T.eurMissing : T.trmMissing));
       nextButton(foot, T.back, () => go(3));
       return;
     }
@@ -769,7 +1090,7 @@
     const h2 = el("h2", "", T.s4Free);
     const big = raw("div", fmt(r.free, cur), "pw-free-amount");
     head.append(h2, big);
-    if (r.fxUsed) head.append(el("span", "pill", T.approx));
+    if (r.fxUsed || (hasFixed() && fixedSummary(d).approx)) head.append(el("span", "pill", T.approx));
     const breakdown = el("dl", "pw-breakdown");
     for (const [k, v, sign] of [
       ["s4Income", r.income, ""],
@@ -903,7 +1224,7 @@
       return true;
     }
   };
-  const validDraft = (v) => v && typeof v === "object" && Array.isArray(v.expenses) && ["USD", "COP"].includes(v.incomeCurrency);
+  const validDraft = (v) => v && typeof v === "object" && Array.isArray(v.expenses) && Core.CURRENCIES.includes(v.incomeCurrency);
   function readEntry(store) {
     try {
       const v = JSON.parse(store.getItem(DRAFT_KEY) || "null");
@@ -913,8 +1234,11 @@
     } catch (_) {}
     return null;
   }
-  function keepDraft(d) {
-    const entry = { savedAt: Date.now(), local: false, draft: Object.assign({}, d, { step: 5 }) };
+  /* opts.step: where to resume (5 by default); opts.reason "gastos": kept to edit the fixed
+     expenses, offered again in the Plan tab even without an account. */
+  function keepDraft(d, opts) {
+    const o = opts || {};
+    const entry = { savedAt: Date.now(), local: false, draft: Object.assign({}, d, { step: o.step || 5, reason: o.reason || null, snapshot: false, useSavedFx: false }) };
     if (!restorePending()) {
       try {
         localStorage.setItem(DRAFT_KEY, JSON.stringify(Object.assign({}, entry, { local: true })));
@@ -971,18 +1295,39 @@
   });
 
   /* ---------------- saving ---------------- */
+  /* Expenses saved with the plan (in the income currency). With fixed expenses: their total
+     (marked fijos) and the other monthly expenses; a recomputed saved plan keeps its own. */
+  function expensesRow(d) {
+    if (d.snapshot) return (d.savedRaw || []).filter((e) => Number(e.amount) > 0);
+    if (hasFixed()) {
+      const out = [{ key: "custom", label: T.fixedName, amount: fixedSummary(d).total, fijos: true }, { key: "otros", amount: Math.max(0, Number(d.others) || 0) }];
+      return out.filter((e) => e.amount > 0);
+    }
+    return d.expenses.filter((e) => Number(e.amount) > 0).map((e) => (e.key === "custom" ? { key: "custom", label: String(e.label || "").slice(0, 60), amount: Number(e.amount) } : { key: e.key, amount: Number(e.amount) }));
+  }
   function rowFrom(d, r) {
-    const fx = r.fxUsed ? fxInfo(d) || (d.fx ? { rate: d.fx.rate, type: d.fx.type, fecha: d.fx.fecha } : null) : null;
+    const keys = ratesUsed(d);
+    const pick = (k) => {
+      const slot = d[RATES[k].slot];
+      if (!keys.includes(k) && !(d.snapshot && slot)) return null;
+      return infoOf(d, k) || (slot ? { rate: slot.rate, type: slot.type, fecha: slot.fecha } : null);
+    };
+    const fx = pick("cop");
+    const fe = pick("eur");
     return {
       income: Number(d.income) || 0,
       income_currency: d.incomeCurrency,
       plan_currency: r.planCurrency,
-      expenses: d.expenses.filter((e) => Number(e.amount) > 0).map((e) => (e.key === "custom" ? { key: "custom", label: String(e.label || "").slice(0, 60), amount: Number(e.amount) } : { key: e.key, amount: Number(e.amount) })),
+      expenses: expensesRow(d),
       extra: r.extra,
       method: r.method,
       fx_rate: fx ? fx.rate : null,
       fx_date: fx ? fx.fecha || today() : null,
       fx_type: fx ? fx.type : null,
+      // 1.8: euro rate used (dollars per 1 euro), null when not needed.
+      eur_rate: fe ? fe.rate : null,
+      eur_date: fe ? fe.fecha || today() : null,
+      eur_type: fe ? fe.type : null,
       plan_month: r.month + "-01",
       items: r.items.map((it) => ({ debtId: it.debtId, name: it.name, currency: it.currency, payment: it.payment, approx: it.approx, first: it.first, dueDate: it.dueDate })),
     };
@@ -1047,9 +1392,8 @@
         openWizard(saved, null, { method });
         return { ok: false, opened: true };
       }
-      const d = draftFromSaved(saved);
+      const d = savedDraft();
       d.method = method;
-      d.useSavedFx = true;
       let r;
       try {
         r = compute(d);
@@ -1078,6 +1422,7 @@
       loadState = "error";
     }
     if (saved && saved.fx_type === "oficial") await ensureTRM(true);
+    if (saved && saved.eur_type === "oficial") await ensureEUR(true);
     renderTab();
     document.dispatchEvent(new Event("mpdd:planchange"));
   }
@@ -1094,6 +1439,18 @@
   }
   if (Cloud()) Cloud().onChange(onCloud);
   document.addEventListener("deudas:languagechange", () => (wizard ? renderStep() : renderTab()));
+  // 1.8: fixed expenses changed (Inicio, sync or this wizard): step 2 and the totals follow.
+  let lastFixedSig = null;
+  document.addEventListener("mpdd:gastoschange", (ev) => {
+    if (!wizard || !draft) return;
+    // A sync or a category change that does not change the totals does not redraw the step:
+    // on a phone it would close the keyboard mid-typing.
+    const sig = window.MPDDGastos ? JSON.stringify(window.MPDDGastos.monthlyTotals()) + window.MPDDGastos.list().length : "";
+    const source = ev && ev.detail && ev.detail.source;
+    if ((source === "sync" || source === "categories") && sig === lastFixedSig) return;
+    lastFixedSig = sig;
+    renderStep();
+  });
   document.addEventListener("mpdd:rendered", () => {
     if (wizard && draft && draft.step === 3) renderStep();
     else if (!wizard) renderTab();

@@ -4,7 +4,7 @@ import ece from "npm:http_ece@1.2.0";
 import { Buffer } from "node:buffer";
 import { createECDH, randomBytes } from "node:crypto";
 import { allowedEndpoint, b64url, encrypt, fromB64url, generateVapidKeys, importVapidPrivate, sendPush, vapidToken } from "../../supabase/functions/enviar-recordatorios/webpush.ts";
-import { localNow, plannedFrom, remindersFor, toAppDebts } from "../../supabase/functions/enviar-recordatorios/reglas.ts";
+import { localNow, plannedFrom, remindersFor, toAppDebts, toAppGastos } from "../../supabase/functions/enviar-recordatorios/reglas.ts";
 
 let fails = 0;
 function ok(c: unknown, msg: string) {
@@ -108,6 +108,27 @@ ok(!allowedEndpoint("https://fcm.googleapis.com:8443/x"), "otro puerto");
   eq(remindersFor({ ...st, send_time: "23:50" }, new Date("2026-11-17T04:45:00Z"), debts.filter((d) => d.id === "a"), {}).map((r) => r.kind), ["manana"], "23:50 se envía a las 23:45");
   eq(remindersFor({ ...st, send_time: "23:50" }, new Date("2026-11-17T04:44:00Z"), debts.filter((d) => d.id === "a"), {}).length, 0, "antes del cuarto de hora no");
   eq(remindersFor({ ...st, tz: "Zona/Inventada" }, now, debts.filter((d) => d.id === "b"), {}).length, 1, "zona inválida → Bogotá");
+}
+
+// 6) 1.8: fixed expenses and euros in the notifications.
+{
+  const st = { enabled: true, days_before: 3, send_time: "08:00", tz: "America/Bogota", lang: "es" };
+  const now = new Date("2026-11-16T14:00:00Z"); // 16 Nov, 9:00 Bogotá
+  const gastos = toAppGastos([
+    { id: "agua", nombre: "Agua", monto: 80000, moneda: "COP", frecuencia: "mensual", dia: 17, mes: null, pagos: [], creado_en: "2026-01-01", actualizado: "2026-11-01T00:00:00Z", borrado: null },
+    { id: "pred", nombre: "Impuesto predial", monto: 1200, moneda: "EUR", frecuencia: "anual", dia: 16, mes: 11, pagos: [], creado_en: "2026-01-01", actualizado: "2026-11-01T00:00:00Z", borrado: null },
+    { id: "hoa", nombre: "HOA", monto: 300, moneda: "USD", frecuencia: "trimestral", dia: 19, mes: 2, pagos: [], creado_en: "2026-01-01", actualizado: "2026-11-01T00:00:00Z", borrado: null },
+    { id: "luz", nombre: "Luz", monto: 50, moneda: "USD", frecuencia: "mensual", dia: 16, pagos: [{ period: "2026-11", date: "2026-11-10", amount: 50 }], creado_en: "2026-01-01", actualizado: "2026-11-10T00:00:00Z", borrado: null },
+    { id: "x", borrado: "2026-11-02T00:00:00Z", actualizado: "2026-11-02T00:00:00Z" },
+  ]);
+  const euroDebt = toAppDebts([{ id: "e", name: "Tarjeta EUR", balance: 900, currency: "EUR", due: 18, extra: { minPayment: 40, createdAt: "2026-01-01" }, deleted_at: null }], []);
+  const list = remindersFor(st, now, euroDebt, {}, gastos);
+  eq(list.map((r) => [r.debtId, r.kind, r.body]), [
+    ["g:pred", "hoy", "Hoy vence Impuesto predial: 1.200,00 € EUR"],
+    ["g:agua", "manana", "Mañana vence Agua: $80.000 COP"],
+    ["e", "antes", "Tarjeta EUR vence en 2 días: 40,00 € EUR"],
+    ["g:hoa", "antes", "HOA vence en 3 días: US$300.00 USD"],
+  ], "gastos fijos y euros: hoy, mañana y días antes (sin los pagados ni borrados)");
 }
 
 if (fails) {

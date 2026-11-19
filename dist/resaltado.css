@@ -1,0 +1,20 @@
+/* 1.8 Upcoming-payment highlight on the Inicio debt cards. Color always comes with a text
+   label. Text colors reach at least 4.5:1 on their backgrounds. */
+.card.due-red{border-color:#b3261e;box-shadow:inset 4px 0 0 #b3261e}
+.card.due-yellow{border-color:#b7791f;box-shadow:inset 4px 0 0 #d69e2e}
+.card.due-blue{border-color:#2b6cb0;box-shadow:inset 4px 0 0 #2b6cb0}
+.card[data-due-level]:focus{outline:3px solid #146a55;outline-offset:2px}
+.due-flag{display:inline-flex;flex-wrap:wrap;gap:0;align-items:center;margin:0 0 10px;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:800;border:1px solid transparent}
+.due-flag-red{background:#fde8e6;color:#8c1d18;border-color:#f3b8b2}
+.due-flag-yellow{background:#fff4d6;color:#6b4500;border-color:#efd28a}
+.due-flag-blue{background:#e6f0fb;color:#1d4f86;border-color:#b9d3f0}
+.due-summary{display:flex;align-items:center;flex-wrap:wrap;gap:4px;width:100%;margin:0 0 14px;padding:11px 14px;border-radius:12px;border:1px solid;font-size:14px;font-weight:750;text-align:left;cursor:pointer;min-height:44px}
+.due-summary.due-red{background:#fde8e6;color:#8c1d18;border-color:#f3b8b2}
+.due-summary.due-yellow{background:#fff4d6;color:#6b4500;border-color:#efd28a}
+.due-summary.due-blue{background:#e6f0fb;color:#1d4f86;border-color:#b9d3f0}
+.due-summary:focus-visible{outline:2px solid #146a55;outline-offset:2px}
+.due-summary-arrow{margin-left:auto;font-size:18px;line-height:1}
+.due-summary[hidden],.due-order-note[hidden]{display:none}
+.due-order-note{margin:-6px 0 12px;font-size:12px}
+/* 1.8: as an inline box (not flex) the spaces between "Vencido hace", the number and "días" are kept. */
+.due-flag{display:inline-block;line-height:1.5}

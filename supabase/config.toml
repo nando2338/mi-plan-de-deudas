@@ -1,6 +1,6 @@
 # Supabase CLI settings for this project (only what the app needs).
-# Both functions are deployed WITHOUT JWT verification at the gateway, because:
-#  * trm: the TRM is public data and the app calls it without a session.
+# The three functions are deployed WITHOUT JWT verification at the gateway, because:
+#  * trm and tasa-euro: the TRM and the ECB euro rate are public data and the app calls it without a session.
 #  * enviar-recordatorios: pg_cron calls it without a session; the function checks itself
 #    (cron secret in Vault, or the user's token for the test notification).
 project_id = "gwykdlwuipirusfixioo"
@@ -9,4 +9,7 @@ project_id = "gwykdlwuipirusfixioo"
 verify_jwt = false
 
 [functions.enviar-recordatorios]
+verify_jwt = false
+
+[functions.tasa-euro]
 verify_jwt = false

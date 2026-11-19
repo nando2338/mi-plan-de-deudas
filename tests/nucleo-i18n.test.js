@@ -27,7 +27,8 @@ test("validación equivalente a las restricciones de la base de datos", () => {
   assert.ok(Core.problems(Core.toRemote(debt("a", "x".repeat(81)))).includes("name"));
   assert.ok(Core.problems(Core.toRemote(debt("a", "   "))).includes("name"));
   assert.ok(Core.problems(Core.toRemote(debt("a", "A", { balance: -1 }))).includes("balance"));
-  assert.ok(Core.problems(Core.toRemote(debt("a", "A", { currency: "EUR" }))).includes("currency"));
+  assert.ok(Core.problems(Core.toRemote(debt("a", "A", { currency: "ARS" }))).includes("currency"));
+  assert.deepEqual(Core.problems(Core.toRemote(debt("a", "A", { currency: "EUR" }))), [], "1.8: el euro es válido");
   assert.ok(Core.problems(Core.toRemote(debt("a", "A", { due: "32" }))).includes("due"));
   assert.ok(Core.problems(Core.toRemote(debt("a", "A", { due: "0" }))).includes("due"));
   assert.deepEqual(Core.problems(Core.toRemote(debt("a", "A", { due: "31" }))), []);

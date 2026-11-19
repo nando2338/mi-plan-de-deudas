@@ -7,7 +7,8 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
   const KNOWN = ["id", "name", "balance", "initial", "limit", "rate", "currency", "due", "source", "history"];
-  const SETTINGS_KEYS = ["nando-recordatorios-v1", "deudas-lang-v1", "deudas-currency-pref-v1", "nando-deudas-sort-v1", "deudas-budget-v1"];
+  // 1.8: "mpdd-gastos-categorias-v1" = fixed-expense categories created by the user.
+  const SETTINGS_KEYS = ["nando-recordatorios-v1", "deudas-lang-v1", "deudas-currency-pref-v1", "nando-deudas-sort-v1", "deudas-budget-v1", "mpdd-gastos-categorias-v1"];
   const MAX = 90071992547409;
   const forbidden = new Set(["__proto__", "prototype", "constructor"]);
 
@@ -89,7 +90,7 @@
     if (!v.name.trim() || v.name.length > 80) out.push("name");
     if (!money(v.balance) || !money(v.initial)) out.push("balance");
     if ((v.limit !== null && !money(v.limit)) || (v.rate !== null && !money(v.rate))) out.push("limitRate");
-    if (!["USD", "COP"].includes(v.currency)) out.push("currency");
+    if (!["USD", "COP", "EUR"].includes(v.currency)) out.push("currency");
     if (v.due !== null && !(Number.isInteger(v.due) && v.due >= 1 && v.due <= 31)) out.push("due");
     if (v.source !== null && v.source.length > 200) out.push("source");
     if (v.payments.length > 99999 || v.payments.some((p) => !(typeof p.amount === "number" && Number.isFinite(p.amount) && p.amount > 0 && p.amount <= MAX))) out.push("payments");

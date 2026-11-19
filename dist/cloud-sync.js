@@ -468,7 +468,9 @@
         }
         const remote = settingsMap(pull);
         applySettings(remote, [...new Set([...remote.keys(), "deudas-budget-v1", "nando-recordatorios-v1"])]);
+        if (!automatic) gastosReplace = true; // 1.8: "use the cloud copy" also for fixed expenses
       } else if (choice === "local") {
+        if (!automatic) gastosKeepLocal = true; // 1.8: "keep this device's copy" also for fixed expenses
         const t = nowISO();
         for (const r of pull.debts || []) {
           const v = r.deleted ? null : Core.toRemote(Core.fromRemote(r.id, r));
@@ -531,8 +533,21 @@
         continue;
       }
       // Reuse the backup validator so the cloud can never inject an invalid preference.
-      const fake = { getItem: (key) => (key === k ? value : null) };
-      window.DebtBackupPlus.readPrefs(fake);
+      if (k === "mpdd-gastos-categorias-v1") {
+        // 1.8: custom categories: list of { key: "c-…", label ≤ 30, icon from the list }.
+        if (!validCategories(value)) continue;
+        // Merge by key with this device's categories: two devices that create one at the same
+        // time keep both (the merged list is uploaded on the next sync).
+        const merged = mergeCategories(ls.getItem(k), value);
+        if (ls.getItem(k) !== merged) {
+          ls.setItem(k, merged);
+          changed = true;
+        }
+        continue;
+      } else {
+        const fake = { getItem: (key) => (key === k ? value : null) };
+        window.DebtBackupPlus.readPrefs(fake);
+      }
       if (ls.getItem(k) !== value) {
         ls.setItem(k, value);
         if (ls.getItem(k) !== value) throw codeError("apply");
@@ -540,7 +555,34 @@
       }
     }
     if (changed) status.settingsChanged = true;
+    if (changed && keys.includes("mpdd-gastos-categorias-v1")) {
+      try {
+        document.dispatchEvent(new CustomEvent("mpdd:gastoschange", { detail: { source: "categories" } }));
+      } catch (_) {}
+    }
     return changed;
+  }
+  function mergeCategories(localValue, remoteValue) {
+    let a = [],
+      b = [];
+    try {
+      a = validCategories(localValue) ? JSON.parse(localValue) : [];
+    } catch (_) {}
+    try {
+      b = JSON.parse(remoteValue);
+    } catch (_) {}
+    const byKey = new Map();
+    for (const c of b.concat(a)) if (!byKey.has(c.key)) byKey.set(c.key, c);
+    return JSON.stringify([...byKey.values()].slice(-40));
+  }
+  function validCategories(value) {
+    try {
+      const v = JSON.parse(value);
+      const icons = (window.MPDDGastosCore && window.MPDDGastosCore.CUSTOM_ICONS) || [];
+      return Array.isArray(v) && v.length <= 40 && v.every((c) => c && typeof c.key === "string" && /^c-[a-z0-9-]{1,36}$/.test(c.key) && typeof c.label === "string" && c.label.trim() && c.label.length <= 30 && icons.includes(c.icon));
+    } catch (_) {
+      return false;
+    }
   }
   function editingOpen() {
     const d = document.getElementById("dialog");
@@ -778,6 +820,7 @@
         else rejected = true;
       }
     }
+    await gastosSync(); // 1.8: fixed expenses (never fails the debt sync)
     writeState(state);
     backoff = 0;
     lastPendingSig = pendingSignature(state);
@@ -794,7 +837,7 @@
   function wipeLocal() {
     if (locked()) return false;
     const keep = new Set(["deudas-lang-v1"]);
-    const exact = new Set([KEY, ...window.DebtBackupPlus.PREFS, "mpdd-foreground-notices-sent-v1", "mpdd-plan-draft-v1", "mpdd-account-prompts-v1", "mpdd-push-device-v1"]);
+    const exact = new Set([KEY, ...window.DebtBackupPlus.PREFS, "mpdd-foreground-notices-sent-v1", "mpdd-plan-draft-v1", "mpdd-account-prompts-v1", "mpdd-push-device-v1", "mpdd-gastos-fijos-v1", "mpdd-gastos-categorias-v1"]);
     const keys = [];
     for (let i = 0; i < ls.length; i++) keys.push(ls.key(i));
     for (const k of keys) {
@@ -832,6 +875,7 @@
     clearTimeout(scanTimer);
     try {
       if (running) await running;
+      if (gastosJob) await gastosJob; // 1.8
     } catch (_) {}
     try {
       // The plan lives in its own table (1.3): remove it first (own row via RLS).
@@ -842,7 +886,8 @@
         ls.removeItem(PLAN_CACHE);
       } catch (_) {}
       // 1.4: notification devices and settings (own rows via RLS).
-      for (const table of ["push_subscriptions", "push_settings"]) {
+      // 1.8: fixed expenses (gastos_fijos) too.
+      for (const table of ["push_subscriptions", "push_settings", "gastos_fijos"]) {
         const r = await c.from(table).delete().eq("user_id", status.userId);
         if (r && r.error) throw codeError(navigator.onLine === false ? "network" : "server");
       }
@@ -892,6 +937,42 @@
       trmMemo = { at: Date.now(), value };
       try {
         ls.setItem(TRM_CACHE, JSON.stringify({ valor, fecha: d.fecha, fuente: value.fuente }));
+      } catch (_) {}
+      return value;
+    } catch (_) {
+      return cached();
+    }
+  };
+  /* 1.8: euro reference rate (dollars per 1 euro), European Central Bank, through the
+     "tasa-euro" function. Same as the TRM: 10-minute memo, and offline the last saved one
+     (marked desactualizada, with its date). */
+  let eurMemo = null;
+  const EUR_CACHE = "mpdd-eur-cache-v1";
+  api.fetchEUR = async ({ force = false } = {}) => {
+    if (status.config !== "ok") return { ok: false, error: "config" };
+    if (!force && eurMemo && Date.now() - eurMemo.at < 10 * 60 * 1000) return eurMemo.value;
+    const valid = (v, f) => typeof v === "number" && v >= 0.2 && v <= 5 && /^\d{4}-\d{2}-\d{2}$/.test(String(f));
+    const cached = () => {
+      try {
+        const c = JSON.parse(ls.getItem(EUR_CACHE) || "null");
+        if (c && valid(c.usdPorEur, c.fecha)) return { ok: true, usdPorEur: c.usdPorEur, fecha: c.fecha, fuente: String(c.fuente || ""), desactualizada: true };
+      } catch (_) {}
+      return { ok: false, error: "network" };
+    };
+    if (navigator.onLine === false) return cached();
+    try {
+      const ctrl = typeof AbortController === "function" ? new AbortController() : null;
+      const timer = ctrl ? setTimeout(() => ctrl.abort(), 12000) : null;
+      const res = await fetch(String(CFG.supabaseUrl).replace(/\/$/, "") + "/functions/v1/tasa-euro", { headers: { apikey: CFG.supabaseKey }, cache: "no-store", signal: ctrl ? ctrl.signal : undefined });
+      if (timer) clearTimeout(timer);
+      if (!res.ok) return cached();
+      const d = await res.json();
+      const usdPorEur = Number(d && d.usdPorEur);
+      if (!valid(usdPorEur, d && d.fecha)) return cached();
+      const value = { ok: true, usdPorEur, fecha: d.fecha, fuente: String(d.fuente || ""), desactualizada: !!d.desactualizada };
+      eurMemo = { at: Date.now(), value };
+      try {
+        ls.setItem(EUR_CACHE, JSON.stringify({ usdPorEur, fecha: d.fecha, fuente: value.fuente }));
       } catch (_) {}
       return value;
     } catch (_) {
@@ -1048,6 +1129,42 @@
       return { ok: false, error: "network" };
     }
   };
+  /* 1.8 "Enviar sugerencia": the table is insert-only (never read back). user_id is never sent:
+     the database takes it from the token (auth.uid()) when signed in. Nothing is logged. */
+  api.sendSuggestion = async (s) => {
+    if (status.config !== "ok") return { ok: false, error: "config" };
+    if (navigator.onLine === false) return { ok: false, error: "network" };
+    const body = JSON.stringify({ tipo: s.tipo, texto: s.texto, contacto: s.contacto || null, idioma: s.idioma === "en" ? "en" : "es", version: String(s.version || "") });
+    let token = null;
+    if (status.userId) {
+      try {
+        const c = await getClient();
+        const { data } = await c.auth.getSession();
+        token = (data && data.session && data.session.access_token) || null;
+      } catch (_) {}
+    }
+    const post = (bearer) =>
+      fetch(String(CFG.supabaseUrl).replace(/\/$/, "") + "/rest/v1/sugerencias", {
+        method: "POST",
+        headers: { apikey: CFG.supabaseKey, "Content-Type": "application/json", Prefer: "return=minimal", Authorization: "Bearer " + bearer },
+        body,
+        cache: "no-store",
+      });
+    try {
+      let res = await post(token || CFG.supabaseKey);
+      // An expired session must not lose the suggestion: send it without the account.
+      if (res.status === 401 && token) res = await post(CFG.supabaseKey);
+      if (res.status === 201) return { ok: true };
+      let text = "";
+      try {
+        text = await res.text();
+      } catch (_) {}
+      if (/demasiadas_sugerencias/.test(text)) return { ok: false, error: "rateLimit" };
+      return { ok: false, error: "server" };
+    } catch (_) {
+      return { ok: false, error: "network" };
+    }
+  };
   /* Best effort, before signing out: forget this device so the account stops sending to it. */
   async function pushForgetDevice() {
     try {
@@ -1069,6 +1186,107 @@
     return signOutWithoutPush(opts);
   };
   /* ================= fin 1.4 Notificaciones push ================= */
+
+  /* ================= 1.8 Gastos fijos (tabla gastos_fijos) =================
+     MPDDGastos (this device) is the working copy. Each sync pulls the user's own rows
+     (RLS), merges them with MPDDGastosCore.merge (last write wins by updatedAt; deletion
+     marks are kept so a deletion reaches every device), pushes what is newer here or missing
+     in the cloud, and saves the result here with replaceAll(list, "sync").
+     Offline or on any error nothing is shown: the next sync tries again. Never logs data. */
+  let gastosJob = null,
+    gastosAgain = false,
+    gastosTimer = null,
+    gastosReplace = false,
+    gastosKeepLocal = false;
+  const gastosTime = (g) => Date.parse(g && g.updatedAt) || 0;
+  const gastosText = (list) => JSON.stringify(list.slice().sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)));
+  async function gastosUpsert(c, rows) {
+    if (!rows.length) return;
+    for (let i = 0; i < rows.length; i += 200) {
+      const chunk = rows.slice(i, i + 200);
+      const r = await c.from("gastos_fijos").upsert(chunk, { onConflict: "user_id,id" });
+      if (!r || !r.error) continue;
+      if (!BAD_DATA_CODES.has(String(r.error.code || ""))) throw codeError(navigator.onLine === false ? "network" : "server");
+      // One row refused by the database: send the others one by one.
+      for (const row of chunk) {
+        const one = await c.from("gastos_fijos").upsert(row, { onConflict: "user_id,id" });
+        if (one && one.error && !BAD_DATA_CODES.has(String(one.error.code || ""))) throw codeError("server");
+      }
+    }
+  }
+  async function gastosRun() {
+    const G = window.MPDDGastos,
+      GC = window.MPDDGastosCore;
+    if (!G || !GC || !status.userId || deleting) return;
+    const state = readState();
+    // Only once this device is linked to the account (after the first-sign-in choice).
+    if (!state || state.userId !== status.userId) return;
+    if (ls.getItem(JOURNAL) !== null) return;
+    if (navigator.onLine === false) return;
+    const uid = status.userId;
+    const c = await getClient();
+    const res = await c.from("gastos_fijos").select("*");
+    if (!res || res.error) throw codeError("server");
+    if (deleting || status.userId !== uid) return;
+    const remote = (Array.isArray(res.data) ? res.data : []).map(GC.fromRow).filter(Boolean);
+    const remoteById = new Map(remote.map((g) => [g.id, g]));
+    const local = G.all();
+    const replace = gastosReplace;
+    gastosReplace = false;
+    const keepLocal = gastosKeepLocal;
+    gastosKeepLocal = false;
+    let merged;
+    if (replace) merged = GC.sanitize(remote);
+    else if (keepLocal) {
+      // Like the debts: this device's copy replaces the cloud one. Whatever exists only in
+      // the cloud is marked as deleted, and everything gets a new date so it wins.
+      const now = new Date().toISOString();
+      const localIds = new Set(local.map((g) => g.id));
+      merged = local
+        .map((g) => Object.assign({}, g, { updatedAt: now }))
+        .concat(remote.filter((r) => !localIds.has(r.id) && !r.deleted).map((r) => ({ id: r.id, deleted: true, updatedAt: now })));
+    } else merged = GC.merge(local, remote);
+    const push = merged.filter((g) => {
+      const r = remoteById.get(g.id);
+      return !r || gastosTime(g) > gastosTime(r);
+    });
+    await gastosUpsert(
+      c,
+      push.map((g) => Object.assign(GC.toRow(g), { user_id: uid })),
+    );
+    if (deleting || status.userId !== uid) return;
+    // Edited here while the request was in flight: merge again on the next run.
+    if (gastosText(G.all()) !== gastosText(local)) {
+      gastosAgain = true;
+      return;
+    }
+    if (gastosText(merged) !== gastosText(local)) G.replaceAll(merged, "sync");
+  }
+  function gastosSync() {
+    if (gastosJob) {
+      gastosAgain = true;
+      return gastosJob;
+    }
+    gastosJob = gastosRun()
+      .catch(() => {})
+      .finally(() => {
+        gastosJob = null;
+        if (gastosAgain) {
+          gastosAgain = false;
+          clearTimeout(gastosTimer);
+          gastosTimer = setTimeout(gastosSync, 800);
+        }
+      });
+    return gastosJob;
+  }
+  document.addEventListener("mpdd:gastoschange", (e) => {
+    const source = e && e.detail && e.detail.source;
+    if ((source !== "local" && source !== "restore") || !status.userId) return;
+    clearTimeout(gastosTimer);
+    gastosTimer = setTimeout(gastosSync, 1200);
+  });
+  api.syncGastos = () => gastosSync();
+  /* ================= fin 1.8 Gastos fijos ================= */
 
   /* ---------------- boot ---------------- */
   let bootTimer = null;

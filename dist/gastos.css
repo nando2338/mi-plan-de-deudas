@@ -1,0 +1,56 @@
+/* 1.8 Gastos fijos (Inicio). Same green design; the due highlight uses the shared palette
+   idea: red = today/overdue, amber = tomorrow, blue = 2–7 days, always with a text label. */
+.gf-section{margin-top:28px}
+.gf-section .section-head{flex-wrap:wrap}
+.gf-add{white-space:nowrap}
+.gf-summary{display:flex;flex-wrap:wrap;gap:12px 28px;align-items:flex-start;background:#fff;border:1px solid #e1e9e1;border-radius:15px;padding:16px 18px;margin-bottom:11px}
+.gf-summary .money-line{font-size:20px;font-weight:800;color:#163c2b}
+.gf-summary .gf-note{flex-basis:100%;margin:0;font-size:12px}
+.gf-thismonth .money-line{font-size:17px;color:#23664b}
+.gf-status:empty{display:none}
+.gf-status{margin:0 0 8px}
+.gf-card{border-left:4px solid #e1e9e1}
+.gf-head{display:flex;gap:11px;align-items:flex-start;min-width:0}
+.gf-head h3{overflow-wrap:anywhere}
+.gf-icon{display:inline-grid;place-items:center;flex:none;width:38px;height:38px;border-radius:11px;background:#eef6e8;font-size:20px;line-height:1}
+.gf-cat{text-transform:none;letter-spacing:.02em}
+.gf-equiv{margin-top:2px}
+.gf-meta{margin-top:12px;flex-wrap:wrap;align-items:center}
+.gf-marks{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.gf-due,.gf-badge-month{display:inline-block;padding:3px 9px;border-radius:999px;font-size:12px;font-weight:750;border:1px solid transparent;white-space:nowrap}
+.gf-badge-month{background:#e7f3df;color:#285a42;border-color:#cfe5c2}
+.gf-card.gf-red{border-left-color:#c0392b}
+.gf-card.gf-yellow{border-left-color:#d99a06}
+.gf-card.gf-blue{border-left-color:#2f6fb5}
+.gf-due-red{background:#fde8e5;color:#a8321f;border-color:#f3c3ba}
+.gf-due-yellow{background:#fff3cf;color:#7a5600;border-color:#f1d27a}
+.gf-due-blue{background:#e4eefa;color:#1f4f86;border-color:#b9d0ee}
+.gf-note-text{margin:8px 0 0;overflow-wrap:anywhere}
+.gf-actions,.gf-card .actions{flex-wrap:wrap}
+.gf-confirm{margin-top:12px}
+.gf-empty p{margin:0 0 8px}
+.gf-form textarea{border:1px solid #d6e1d7;border-radius:9px;padding:10px;width:100%;color:var(--ink);background:#fff;font:inherit;resize:vertical}
+.gf-form .help{margin:0}
+.gf-icons{border:1px solid #d6e1d7;border-radius:9px;margin:12px 0 0;padding:8px 10px;display:flex;flex-wrap:wrap;gap:6px}
+.gf-icons legend{font-size:12px;font-weight:700;color:#536d5c;padding:0 4px}
+.gf-icon-choice{display:inline-flex;align-items:center;gap:4px;padding:6px 8px;border-radius:8px;border:1px solid #e1e9e1;font-size:18px;cursor:pointer;min-height:40px}
+.gf-icon-choice:has(input:checked){border-color:#176849;background:#e7f3df}
+.gf-icon-choice input{margin:0}
+#gf-dialog .modal{max-height:calc(100vh - 40px);overflow:auto}
+/* Calendar: fixed expenses are marked with their icon and a small tag. */
+.gf-tag{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;background:#eef6e8;color:#285a42;font-size:11px;font-weight:750;white-space:nowrap}
+.gf-cal-icon{margin-right:4px}
+@media(max-width:720px){.gf-section .formgrid,.gf-form .formgrid{grid-template-columns:1fr}.gf-summary .money-line{font-size:18px}}
+@media(max-width:420px){.gf-section .cardtop{flex-direction:column}.gf-section .balance{text-align:left}}
+
+/* 1.8: same colors as the debt highlight (resaltado.css), so red, yellow and blue mean the same in both sections. */
+.gf-card.gf-red{border-color:#b3261e;border-left-color:#b3261e;box-shadow:inset 4px 0 0 #b3261e}
+.gf-card.gf-yellow{border-color:#b7791f;border-left-color:#d69e2e;box-shadow:inset 4px 0 0 #d69e2e}
+.gf-card.gf-blue{border-color:#2b6cb0;border-left-color:#2b6cb0;box-shadow:inset 4px 0 0 #2b6cb0}
+.gf-due-red{background:#fde8e6;color:#8c1d18;border-color:#f3b8b2}
+.gf-due-yellow{background:#fff4d6;color:#6b4500;border-color:#efd28a}
+.gf-due-blue{background:#e6f0fb;color:#1d4f86;border-color:#b9d3f0}
+/* 1.8: in "Próximos pagos" a fixed expense reads on one line: icon, name and a small "Gasto fijo" tag. */
+.upcoming-row .up-body{display:block}
+.upcoming-row .up-body > *{display:inline}
+.upcoming-row .up-body .gf-tag{display:inline-block;vertical-align:1px}

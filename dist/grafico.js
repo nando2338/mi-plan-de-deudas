@@ -1,5 +1,5 @@
 /* Pestaña "Gráfico": "Lo que debo" (1.4, por defecto) y "Lo que pagué" (dona de lo pagado
-   en un periodo, versión 1.2). Una moneda a la vez: nunca mezcla ni convierte USD y COP.
+   en un periodo, versión 1.2). Una moneda a la vez: nunca mezcla ni convierte USD, COP y EUR.
    Datos del usuario solo con textContent; el SVG se arma con APIs del DOM. */
 (function () {
   "use strict";
@@ -135,7 +135,7 @@
   let cur = "USD";
   let mode = "owe";
   let oweView = "month";
-  const curSwitch = toggles("chart-currency", T.currency, [["USD", "USD", true], ["COP", "COP", true]], (c) => ((cur = c), safeRender()));
+  const curSwitch = toggles("chart-currency", T.currency, [["USD", "USD", true], ["COP", "COP", true], ["EUR", "EUR", true]], (c) => ((cur = c), safeRender()));
   const curButtons = curSwitch.buttons;
   for (const b of curButtons) b.dataset.chartCur = b.dataset.value;
   const switchBox = curSwitch.box;
@@ -417,13 +417,14 @@
   // Default currency for the chart: the one with payments in the period, else the app default.
   try {
     const pref = localStorage.getItem("deudas-currency-pref-v1");
-    if (pref === "COP" || pref === "USD") cur = pref;
+    if (["USD", "COP", "EUR"].includes(pref)) cur = pref;
   } catch (_) {}
-  // If the preferred currency has no debts but the other one does, start with the other one.
+  // If the preferred currency has no debts but another one does, start with the first one that has (USD, COP, EUR).
   try {
     const owing = appDebts().filter((d) => Number(d.balance) > 0);
-    if (!owing.some((d) => d.currency === cur) && owing.some((d) => d.currency === (cur === "USD" ? "COP" : "USD"))) cur = cur === "USD" ? "COP" : "USD";
+    const other = ["USD", "COP", "EUR"].find((c) => owing.some((d) => d.currency === c));
+    if (!owing.some((d) => d.currency === cur) && other) cur = other;
   } catch (_) {}
-  window.MPDDChart = { render: safeRender, setMode: (m) => ((mode = m === "paid" ? "paid" : "owe"), safeRender()), setView: (v) => ((oweView = v === "total" ? "total" : "month"), safeRender()), setCurrency: (c) => ((cur = c === "COP" ? "COP" : "USD"), safeRender()), setRange: (f, t) => ((fromInput.value = f), (toInput.value = t), safeRender()) };
+  window.MPDDChart = { render: safeRender, setMode: (m) => ((mode = m === "paid" ? "paid" : "owe"), safeRender()), setView: (v) => ((oweView = v === "total" ? "total" : "month"), safeRender()), setCurrency: (c) => ((cur = ["COP", "EUR"].includes(c) ? c : "USD"), safeRender()), setRange: (f, t) => ((fromInput.value = f), (toInput.value = t), safeRender()) };
   safeRender();
 })();

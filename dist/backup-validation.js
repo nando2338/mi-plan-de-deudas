@@ -20,7 +20,7 @@ function validateBackup(raw) {
   for (const d of data.debts) {
     if (!isObject(d) || typeof d.id !== 'string' || !d.id.trim() || d.id.length > 200 || ids.has(d.id)) throw new Error('Identificador de deuda inválido o duplicado.');
     ids.add(d.id);
-    if (typeof d.name !== 'string' || !d.name.trim() || d.name.length > 200 || !['USD','COP'].includes(d.currency)) throw new Error('Nombre o moneda inválidos.');
+    if (typeof d.name !== 'string' || !d.name.trim() || d.name.length > 200 || !['USD','COP','EUR'].includes(d.currency)) throw new Error('Nombre o moneda inválidos.');
     for (const field of ['balance','initial']) if (typeof d[field] !== 'number' || !Number.isFinite(d[field]) || d[field] < 0 || d[field] > Number.MAX_SAFE_INTEGER / 100) throw new Error('Saldo inválido.');
     for (const field of ['limit','rate']) if (d[field] != null && d[field] !== '' && (typeof d[field] !== 'number' || !Number.isFinite(d[field]) || d[field] < 0 || d[field] > Number.MAX_SAFE_INTEGER / 100)) throw new Error('Límite o tasa inválidos.');
     if (d.history !== undefined && !Array.isArray(d.history)) throw new Error('Historial inválido.');

@@ -49,8 +49,8 @@ test("Métodos: carga sola las deudas y el pago del plan (mínimos + extra), sin
   assert.equal(root(h).querySelectorAll('input[type="number"], input[type="text"], select').length, 0);
   assert.equal(root(h).querySelector(".met-options").tagName, "DETAILS", "la fecha va dentro de Opciones");
   assert.equal(root(h).querySelector(".met-options #met-date").value, new Date().toLocaleDateString("en-CA"));
-  // Only a USD / COP selector at the top.
-  assert.deepEqual([...root(h).querySelectorAll(".met-top button")].map((b) => b.textContent), ["USD", "COP"]);
+  // Only the currency selector at the top (1.8: USD, COP and EUR).
+  assert.deepEqual([...root(h).querySelectorAll(".met-top button")].map((b) => b.textContent), ["USD", "COP", "EUR"]);
   // Same engine as the plan.
   const debts = [{ id: "s", balance: 500, rate: 10, min: 25 }, { id: "b", balance: 3000, rate: 30, min: 90 }];
   const ava = P.simulate(debts, 200, "avalanche", ym());

@@ -73,6 +73,16 @@ La función está en `supabase/functions/delete-account/index.ts` y **no se ha d
 9. **Publicar.** Sube `dist/` como siempre. Si cambias `config.js` después, no hace falta cambiar la versión del service worker: ese archivo se pide primero a la red.
 10. **Legal.** Completa los marcadores resaltados de `privacidad.html` y `terminos.html` (responsable, identificación, correo, región, retención) y haz que un abogado revise ambos textos antes de abrir las cuentas al público.
 
+## Versión 1.8 (incluye lo planeado para la 1.7)
+
+- **Enviar sugerencia** (Más y enlace en Inicio): tipo, mensaje obligatorio de 5 a 1000 caracteres, correo opcional. Se guarda en la tabla `sugerencias`, donde la app solo puede insertar. Límite por dispositivo y por hora, más un campo trampa contra robots.
+- **Resaltado de pagos** en las tarjetas: rojo (vence hoy o vencido), amarillo (mañana), azul (2 a 7 días), con texto y resumen arriba de "Mis deudas".
+- **Euro (EUR)** en toda la app: formato "1.234,56 € EUR"; tasa del BCE (función `tasa-euro`) junto con la TRM.
+- **Gastos fijos** en Inicio (tabla `gastos_fijos`): frecuencias mensual, trimestral, semestral y anual; categorías propias; pagado por periodo; total mensual por moneda. Aparecen en el calendario, los avisos, las notificaciones y los respaldos.
+- **Asistente del Plan:** la pregunta de gastos ya no se repite. Usa los gastos fijos guardados o los pide una sola vez.
+- Volver a la 1.6: Netlify → *Deploys* → despliegue anterior → *Publish deploy*. Los cambios en Supabase solo agregan cosas; la 1.6 sigue funcionando con ellos.
+- Etiqueta: crear `v1.8` a mano en GitHub → *Releases*.
+
 ## Versión 1.6
 
 - **Ojo para ver la contraseña** en Iniciar sesión, Crear cuenta, "Repite la contraseña", recuperar y cambiar contraseña: oculta por defecto, botón accesible de 44 px ("Mostrar/Ocultar contraseña", también en inglés) que no tapa lo escrito.
@@ -168,7 +178,7 @@ Requisitos: Node.js 20 o superior.
 ```bash
 cd tests
 npm install        # instala jsdom (solo para pruebas)
-npm test           # 118 pruebas automatizadas con DOM simulado
+npm test           # 185 pruebas automatizadas con DOM simulado
 npm run check      # node --check en todos los JS + recursos de HTML, service worker y manifiesto
 ```
 

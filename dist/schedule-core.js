@@ -131,7 +131,7 @@
     return out.sort((a, b) => b.date.localeCompare(a.date) || a.name.localeCompare(b.name));
   }
   function addTo(map, currency, n) {
-    if (currency !== "USD" && currency !== "COP") return;
+    if (currency !== "USD" && currency !== "COP" && currency !== "EUR") return;
     map[currency] = (map[currency] || 0) + n;
   }
   /* "Por pagar este mes" y "Pagado este mes", separados por moneda. */
@@ -204,7 +204,7 @@
      view "month": lo que falta pagar este mes (plan si existe, si no la cuota/mínimo).
      view "total": el saldo de cada deuda. */
   function owed(debts, { currency, view, today, planned }) {
-    const all = (debts || []).filter((d) => Number(d.balance) > 0 && (d.currency === "USD" || d.currency === "COP"));
+    const all = (debts || []).filter((d) => Number(d.balance) > 0 && (d.currency === "USD" || d.currency === "COP" || d.currency === "EUR"));
     const mine = all.filter((d) => d.currency === currency);
     const others = {};
     for (const d of all) if (d.currency !== currency) others[d.currency] = (others[d.currency] || 0) + 1;
@@ -260,6 +260,20 @@
       priciest: priciest ? { debtId: String(priciest.id), name: String(priciest.name || ""), rate: rateOf(priciest) } : null,
     };
   }
+  /* Due-date highlight (1.7), shared by debts and fixed expenses.
+     red    = due today or overdue and unpaid ("Vence hoy" / "Vencido hace X días")
+     yellow = due tomorrow ("Vence mañana")
+     blue   = due in 2 to 7 days ("Vence en X días")
+     null   = paid, no date, or more than 7 days away. The color always goes with a text label. */
+  function dueLevel(dueDate, today, paid) {
+    if (paid || !validDate(dueDate) || !validDate(today)) return null;
+    const days = daysBetween(today, dueDate);
+    if (days < 0) return { level: "red", days, kind: "overdue" };
+    if (days === 0) return { level: "red", days, kind: "today" };
+    if (days === 1) return { level: "yellow", days, kind: "tomorrow" };
+    if (days <= 7) return { level: "blue", days, kind: "soon" };
+    return null;
+  }
   /* Contador del ícono: cuotas vencidas sin pagar (últimos 2 meses) y próximas dentro de daysBefore días. */
   function badgeCount(debts, today, daysBefore) {
     const from = monthStart(addDays(monthStart(today), -40));
@@ -307,5 +321,5 @@
   function validAvisos(v) {
     return !!v && typeof v === "object" && (v.time === undefined || (typeof v.time === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(v.time))) && [1, 3, 7].includes(v.daysBefore);
   }
-  return { AVISOS_KEY, AVISOS_OPT, readAvisos, validAvisos, CATEGORIES, NO_CATEGORY, STATUS_LABEL, validDate, addDays, monthDue, monthEnd, dueDay, minPayment, categoryLabel, paymentStatus, installments, payments, monthSummary, dayColor, daysBetween, overdueFrom, upcoming, cutoffs, owed, badgeCount, toCSV, csvCell };
+  return { AVISOS_KEY, AVISOS_OPT, readAvisos, validAvisos, CATEGORIES, NO_CATEGORY, STATUS_LABEL, validDate, addDays, monthDue, monthEnd, dueDay, minPayment, categoryLabel, paymentStatus, installments, payments, monthSummary, dayColor, daysBetween, overdueFrom, upcoming, cutoffs, owed, dueLevel, badgeCount, toCSV, csvCell };
 });
