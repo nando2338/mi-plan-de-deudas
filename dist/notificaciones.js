@@ -341,9 +341,76 @@
       );
       count++;
     });
+    count += gastoEvents(lines, o, { now, today, en, format, used });
     lines.push("END:VCALENDAR");
     return { text: lines.map(fold).join("\r\n") + "\r\n", count };
   }
+  /* ---------- 1.8 Gastos fijos: one recurring event per expense ----------
+     Monthly / quarterly / semiannual / annual = RRULE FREQ=MONTHLY with INTERVAL 1/3/6/12,
+     starting on the next due date (days 29–31 handled like the debts), alarm the day before.
+     options.gastos: list to use; by default the active ones of MPDDGastos. */
+  const GASTO_STEP = { monthly: 1, quarterly: 3, semiannual: 6, annual: 12 };
+  const GASTO_FREQ = { monthly: ["Mensual", "Monthly"], quarterly: ["Trimestral", "Quarterly"], semiannual: ["Semestral", "Every 6 months"], annual: ["Anual", "Yearly"] };
+  function gastoFirstDue(g, today) {
+    const step = GASTO_STEP[g.frequency] || 1;
+    const anchor = Number(g.month);
+    const [y, m] = today.split("-").map(Number);
+    for (let k = 0; k <= 12; k++) {
+      const n = y * 12 + m - 1 + k;
+      const year = Math.floor(n / 12),
+        month = (n % 12) + 1;
+      if (step > 1 && (((month - anchor) % step) + step) % step !== 0) continue;
+      const d = monthDue(year, month, Number(g.day));
+      if (d >= today) return d;
+    }
+    return null;
+  }
+  function gastoEvents(lines, o, ctx) {
+    let list = o.gastos;
+    if (list === undefined) {
+      try {
+        list = root.MPDDGastos ? root.MPDDGastos.list() : [];
+      } catch (_) {
+        list = [];
+      }
+    }
+    let count = 0;
+    (Array.isArray(list) ? list : []).forEach((g, i) => {
+      if (!g || g.deleted) return;
+      const step = GASTO_STEP[g.frequency];
+      const day = Number(g.day);
+      if (!step || !Number.isInteger(day) || day < 1 || day > 31) return;
+      if (step > 1 && !(Number(g.month) >= 1 && Number(g.month) <= 12)) return;
+      const start = gastoFirstDue(g, ctx.today);
+      if (!start) return;
+      const name = String(g.name || "").trim() || (ctx.en ? "Fixed expense" : "Gasto fijo");
+      let id = "gasto-" + (String(g.id == null ? "" : g.id).replace(/[^A-Za-z0-9_-]/g, "").slice(0, 64) || String(i + 1));
+      while (ctx.used.has(id)) id += "-" + (i + 1);
+      ctx.used.add(id);
+      const freq = GASTO_FREQ[g.frequency][ctx.en ? 1 : 0];
+      const description = (ctx.en ? "Amount: " : "Monto: ") + ctx.format(g.amount, g.currency) + "\n" + (ctx.en ? "Frequency: " : "Frecuencia: ") + freq;
+      lines.push(
+        "BEGIN:VEVENT",
+        "UID:" + id + "@mi-plan-de-deudas",
+        "DTSTAMP:" + stamp(ctx.now),
+        "DTSTART;VALUE=DATE:" + start.replace(/-/g, ""),
+        "DTEND;VALUE=DATE:" + addDays(start, 1).replace(/-/g, ""),
+        "RRULE:" + rrule(day).replace(/^FREQ=MONTHLY/, "FREQ=MONTHLY;INTERVAL=" + step),
+        "SUMMARY:" + icsEscape((ctx.en ? "Fixed expense: " : "Gasto fijo: ") + name),
+        "DESCRIPTION:" + icsEscape(description),
+        "TRANSP:TRANSPARENT",
+        "BEGIN:VALARM",
+        "ACTION:DISPLAY",
+        "DESCRIPTION:" + icsEscape((ctx.en ? "Due tomorrow: " : "Mañana vence: ") + name),
+        "TRIGGER:-P1D",
+        "END:VALARM",
+        "END:VEVENT"
+      );
+      count++;
+    });
+    return count;
+  }
+  /* ---------- fin 1.8 ---------- */
   /* Downloads mis-pagos.ics (on iPhone, text/calendar opens the Calendar app). */
   function downloadICS(win, text) {
     win = win || root;

@@ -50,6 +50,8 @@
     chip_pending: "Pendiente",
     chip_overdue: "Vencido",
     inPlan: "Según tu plan",
+    gasto: "Gasto fijo",
+    undo: "Deshacer",
   };
   window.MPDDStrings = Object.assign(window.MPDDStrings || {}, { calendario: T });
 
@@ -69,6 +71,24 @@
   function today() {
     return new Date().toLocaleDateString("en-CA");
   }
+  /* ---------- 1.8 Gastos fijos: their payments next to the debt installments ---------- */
+  const GC = window.MPDDGastosCore;
+  function gastosIn(from, to, t) {
+    try {
+      return window.MPDDGastos && GC ? GC.occurrences(window.MPDDGastos.list(), { from, to, today: t }) : [];
+    } catch (_) {
+      return [];
+    }
+  }
+  function gastoMark(it, box) {
+    if (it.kind !== "gasto") return;
+    const info = window.MPDDGastos.categoryInfo(it.category, en() ? "en" : "es");
+    const ic = el("span", "gf-cal-icon", info.icon);
+    ic.setAttribute("aria-hidden", "true");
+    box.prepend(ic);
+    box.append(el("span", "gf-tag", T.gasto));
+  }
+  /* ---------- fin 1.8 ---------- */
   function appDebts() {
     try {
       // `debts` is the app's working copy (global binding from index.html).
@@ -150,6 +170,12 @@
     // Summary
     const planned = window.MPDDPlan ? window.MPDDPlan.planned() : {};
     const sum = S.monthSummary(list, y, m, t, planned);
+    // 1.8: fixed expenses count with their full amount in the month they are due.
+    for (const o of gastosIn(y + "-" + String(m).padStart(2, "0") + "-01", S.monthEnd(y, m), t)) {
+      const box = o.payment ? sum.paid : sum.toPay;
+      const v = o.payment ? o.payment.amount : o.expected;
+      if (v > 0) box[o.currency] = MPDDMoney.roundTo((box[o.currency] || 0) + v, o.currency);
+    }
     summary.replaceChildren();
     const a = el("div", "cal-sum");
     a.append(el("div", "label", T.toPay), Object.keys(sum.toPay).length ? moneyLines(sum.toPay) : el("div", "money-line muted", T.nothingToPay));
@@ -169,7 +195,7 @@
     // Grid
     const from = y + "-" + String(m).padStart(2, "0") + "-01",
       to = S.monthEnd(y, m);
-    const inst = S.installments(list, { from, to, today: t, planned });
+    const inst = S.installments(list, { from, to, today: t, planned }).concat(gastosIn(from, to, t)); // 1.8
     const pays = S.payments(list, { from, to });
     grid.replaceChildren();
     const wd = new Intl.DateTimeFormat(locale(), { weekday: "short", timeZone: "UTC" });
@@ -201,7 +227,7 @@
       if (selected === date) cell.setAttribute("aria-pressed", "true");
       grid.append(cell);
     }
-    noDue.hidden = list.some((x) => S.dueDay(x));
+    noDue.hidden = list.some((x) => S.dueDay(x)) || inst.some((x) => x.kind === "gasto");
     const cuts = readCutoffs(list, t);
     renderDetail(inst, pays, t, cuts);
     renderUpcoming(list, t, planned, cuts);
@@ -235,6 +261,7 @@
   function renderUpcoming(list, t, planned, cuts) {
     upList.replaceChildren();
     const rows = S.upcoming(list, t, { daysAhead: 30, planned }).map((i) => ({ kind: "payment", date: i.dueDate, days: i.days, it: i }));
+    for (const o of gastosIn(S.overdueFrom(t), S.addDays(t, 30), t)) if (!o.payment) rows.push({ kind: "payment", date: o.dueDate, days: S.daysBetween(t, o.dueDate), it: o }); // 1.8
     for (const c of cuts) rows.push({ kind: "cutoff", date: c.date, days: c.days, it: c });
     rows.sort((a, b) => a.date.localeCompare(b.date) || (a.kind === b.kind ? 0 : a.kind === "payment" ? -1 : 1) || a.it.name.localeCompare(b.it.name));
     if (!rows.length) {
@@ -246,11 +273,13 @@
       const btn = el("button", "upcoming-row up-" + r.kind + (r.days < 0 ? " is-overdue" : ""));
       btn.type = "button";
       btn.dataset.date = r.date;
-      btn.dataset.debtId = r.it.debtId;
+      if (r.it.kind === "gasto") btn.dataset.gastoId = r.it.gastoId;
+      else btn.dataset.debtId = r.it.debtId;
       const when = el("span", "up-date");
       when.append(raw("span", shortDate(r.date), "up-day"), relative(r.days));
       const body = el("span", "up-body");
       body.append(raw("strong", r.it.name, "up-name"));
+      gastoMark(r.it, body);
       if (r.kind === "cutoff") body.append(el("span", "label", T.cutoff));
       const amt = el("span", "up-amount");
       if (r.kind === "payment") {
@@ -302,6 +331,7 @@
       li.append(chip(it.status));
       const body = el("div", "pay-body");
       body.append(raw("strong", it.name));
+      gastoMark(it, body);
       const amt = it.payment ? formatMoney(it.payment.amount, it.currency) : it.expected !== null ? formatMoney(it.expected, it.currency) : null;
       if (amt) {
         body.append(raw("span", amt, "pay-amount"));
@@ -312,7 +342,20 @@
       if (it.payment) meta.append(" · ", el("span", "", T.paidOn), " ", raw("span", it.payment.date));
       body.append(meta);
       li.append(body);
-      if (!it.payment) {
+      if (it.kind === "gasto") {
+        // 1.8: fixed expenses are marked (and undone) right here, through MPDDGastos.
+        const btn = el("button", "ghost", it.payment ? T.undo : T.markPaid);
+        btn.type = "button";
+        btn.disabled = isLocked;
+        btn.dataset.gastoId = it.gastoId;
+        btn.addEventListener("click", () => {
+          try {
+            if (it.payment) window.MPDDGastos.unmarkPaid(it.gastoId, it.period);
+            else window.MPDDGastos.markPaid(it.gastoId, it.period);
+          } catch (_) {}
+        });
+        li.append(btn);
+      } else if (!it.payment) {
         const btn = el("button", "ghost", T.markPaid);
         btn.type = "button";
         btn.disabled = isLocked;
@@ -365,6 +408,7 @@
     try {
       const cfg = S.readAvisos(localStorage);
       n = S.badgeCount(appDebts(), today(), cfg.daysBefore);
+      n += gastosIn(S.overdueFrom(today()), S.addDays(today(), cfg.daysBefore), today()).filter((o) => !o.payment).length; // 1.8
     } catch (_) {
       n = 0;
     }
@@ -394,6 +438,7 @@
   document.addEventListener("deudas:languagechange", safeRender);
   document.addEventListener("mpdd:avisoschange", updateBadge);
   document.addEventListener("mpdd:planchange", safeRender);
+  document.addEventListener("mpdd:gastoschange", safeRender); // 1.8
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") safeRender();
   });
