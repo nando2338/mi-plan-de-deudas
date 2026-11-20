@@ -269,6 +269,7 @@
       st = Number(e.status || 0),
       name = String(e.name || "");
     if (name === "AuthRetryableFetchError" || st === 0 || e.code === "network" || e instanceof TypeError) return "network";
+    if (st >= 500 && st !== 502 && st !== 503 && st !== 504) return "server";
     if (st === 429 || /rate_limit/.test(code)) return "rateLimit";
     if (code === "weak_password") return "weakPassword";
     if (code === "same_password") return "samePassword";

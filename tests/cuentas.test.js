@@ -488,3 +488,20 @@ test("un registro pendiente que no se puede subir no genera solicitudes repetida
   assert.equal(a.win.Object.prototype.l, undefined);
   assert.equal(a.win.MPDDCloud.status().unsyncable.length, 2);
 });
+
+test("registro: un error 500 del servidor (correo) no se muestra como 'revisa tu correo' ni como 'sin conexión'", async () => {
+  const server = new FakeServer();
+  server.signupError = true;
+  const h = load({ config: "test", server, storage: ES });
+  await sleep(50);
+  h.doc.querySelector(".account-header .account-enter").click();
+  [...h.doc.querySelectorAll("#account-auth-dialog button")].find((b) => b.textContent === "Crear cuenta").click();
+  h.doc.getElementById("acc-accept").checked = true;
+  const form = h.doc.querySelector("#account-auth-dialog form");
+  h.doc.getElementById("acc-signup-email").value = "nuevo@ejemplo.test";
+  h.doc.getElementById("acc-signup-password").value = h.doc.getElementById("acc-signup-password2").value = "suficiente123";
+  form.dispatchEvent(new h.win.Event("submit", { cancelable: true }));
+  const msg = await waitFor(() => /problema del servicio/.test(form.querySelector(".account-msg").textContent) && form.querySelector(".account-msg").textContent);
+  assert.doesNotMatch(msg, /Sin conexión|Si el correo es válido/);
+  h.close();
+});

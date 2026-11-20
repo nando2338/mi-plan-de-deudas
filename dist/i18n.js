@@ -96,6 +96,7 @@ const entries=[['Actualizado manualmente','Updated manually'],
 ,["Las contraseñas no coinciden.","The passwords do not match."]
 ,["Para crear la cuenta debes aceptar la política de privacidad y los términos de uso.","To create the account you must accept the privacy policy and the terms of use."]
 ,["Demasiados intentos. Espera unos minutos y vuelve a intentarlo.","Too many attempts. Wait a few minutes and try again."]
+,["No pudimos completar esto por un problema del servicio (por ejemplo, el envío del correo). Inténtalo de nuevo en unos minutos. Tus datos están a salvo.","We could not complete this because of a service problem (for example, sending the email). Try again in a few minutes. Your data is safe."]
 ,["Esa contraseña no cumple los requisitos de seguridad. Usa una más larga y difícil de adivinar.","That password does not meet the security requirements. Use a longer one that is hard to guess."]
 ,["La nueva contraseña debe ser distinta de la anterior.","The new password must be different from the previous one."]
 ,["Contraseña actualizada.","Password updated."]

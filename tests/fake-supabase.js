@@ -263,6 +263,7 @@ function createFakeLib(server, win) {
           server.calls.push(["signUp", email, o && o.data]);
           const off = net();
           if (off) return off;
+          if (server.signupError) return { data: {}, error: { name: "AuthApiError", status: 500, code: "unexpected_failure", message: "Error sending confirmation email" } };
           if (!server.users.has(email)) {
             const id = server.addUser(email, password);
             server.users.get(email).confirmed = false;

@@ -80,6 +80,7 @@
     m_mismatch: "Las contraseñas no coinciden.",
     m_terms: "Para crear la cuenta debes aceptar la política de privacidad y los términos de uso.",
     m_rateLimit: "Demasiados intentos. Espera unos minutos y vuelve a intentarlo.",
+    m_server: "No pudimos completar esto por un problema del servicio (por ejemplo, el envío del correo). Inténtalo de nuevo en unos minutos. Tus datos están a salvo.",
     m_weakPassword: "Esa contraseña no cumple los requisitos de seguridad. Usa una más larga y difícil de adivinar.",
     m_samePassword: "La nueva contraseña debe ser distinta de la anterior.",
     m_passwordUpdated: "Contraseña actualizada.",
