@@ -20,7 +20,7 @@ Mientras `dist/config.js` tenga los valores de marcador de posición, las cuenta
 | `dist/account-ui.js`, `dist/account.css` | Sección "Cuenta" en el menú Más, estado en el encabezado, avisos y diálogos. |
 | `dist/privacidad.html`, `dist/terminos.html`, `dist/legal.css`, `dist/legal.js` | Borradores de Política de privacidad y Términos de uso (español e inglés). |
 | `supabase/schema.sql` | Tablas, restricciones, Row Level Security y funciones RPC. |
-| `supabase/functions/delete-account/index.ts` | Función de servidor para borrar la cuenta (no desplegada). |
+| `supabase/functions/delete-account/index.ts` | Función de servidor para borrar la cuenta (desplegada desde la 2.0). |
 | `tests/` | Pruebas automatizadas con DOM simulado (jsdom) y comprobación de recursos. |
 
 ### Cómo funciona la sincronización (local primero)
@@ -51,9 +51,9 @@ Mientras `dist/config.js` tenga los valores de marcador de posición, las cuenta
 Borrar un usuario de `auth.users` exige la clave `service_role`, que nunca puede ir en el navegador. Por eso:
 
 1. La app primero llama a `mpdd_delete_my_data()` (función de la base de datos con los permisos del propio usuario) y borra todas sus filas en la nube. Esto funciona aunque la función de servidor no esté desplegada.
-2. Después llama a la función de servidor `delete-account`, que verifica el token del usuario y borra su cuenta. Si no está desplegada, la app lo dice y la persona debe escribir al contacto de la política para completar el borrado.
+2. Después llama a la función de servidor `delete-account`, que verifica el token del usuario y borra su cuenta. Si fallara, la app lo dice y la persona debe escribir a privacy@solvipath.com para completar el borrado.
 
-La función está en `supabase/functions/delete-account/index.ts` y **no se ha desplegado**.
+La función está en `supabase/functions/delete-account/index.ts` y está desplegada desde la 2.0 (`verify_jwt = false`, porque ella misma valida el token con `auth.getUser`).
 
 ## Pasos manuales en Supabase (para principiantes)
 
@@ -69,9 +69,17 @@ La función está en `supabase/functions/delete-account/index.ts` y **no se ha d
 5. **Correo de confirmación.** *Authentication → Sign In / Providers → Email*: deja activo *Confirm email*. En *Authentication → Emails* puedes traducir las plantillas al español (deja `{{ .ConfirmationURL }}` intacto). Para producción configura un SMTP propio (*Authentication → Emails → SMTP Settings*): el correo incluido de Supabase tiene un límite muy bajo de envíos por hora.
 6. **Contraseñas.** *Authentication → Sign In / Providers → Email*: longitud mínima 8. Activa *Leaked password protection* si tu plan lo permite (es la única alerta de seguridad que queda en el proyecto de desarrollo).
 7. **Google (opcional, después).** *Authentication → Sign In / Providers → Google*, con las credenciales de Google Cloud. Luego cambia `googleEnabled: false` a `true` en `dist/config.js`.
-8. **Función para eliminar cuenta (cuando quieras activarla).** Con la [CLI de Supabase](https://supabase.com/docs/guides/cli): `supabase login`, `supabase link --project-ref TU_REF` y `supabase functions deploy delete-account`. O en el panel: *Edge Functions → Deploy a new function → Via Editor*, nombre `delete-account`, pega el contenido de `index.ts` y deja activo *Verify JWT*. Opcional: secreto `ALLOWED_ORIGINS` con tu dominio.
+8. **Función para eliminar cuenta (ya desplegada en la 2.0).** Con la [CLI de Supabase](https://supabase.com/docs/guides/cli): `supabase login`, `supabase link --project-ref TU_REF` y `supabase functions deploy delete-account`. O en el panel: *Edge Functions → Deploy a new function → Via Editor*, nombre `delete-account`, pega el contenido de `index.ts` y desactiva *Verify JWT* (la función valida el token ella misma). Opcional: secreto `ALLOWED_ORIGINS` con tu dominio.
 9. **Publicar.** Sube `dist/` como siempre. Si cambias `config.js` después, no hace falta cambiar la versión del service worker: ese archivo se pide primero a la red.
 10. **Legal.** Completa los marcadores resaltados de `privacidad.html` y `terminos.html` (responsable, identificación, correo, región, retención) y haz que un abogado revise ambos textos antes de abrir las cuentas al público.
+
+## Versión 2.0
+
+- **Encabezado:** logo 44 px (52 px en escritorio), nombre 22/26 px, lema 13/14 px en verde claro (pasa a dos líneas en pantallas angostas) y estado de sincronización a 12 px con más contraste.
+- **Páginas públicas** (`/privacidad.html`, `/terminos.html`, `/eliminar-cuenta.html`): textos finales en inglés y español, selector con inglés primero y el idioma de la app por defecto. Las tres están en el service worker.
+- **Registro:** casilla obligatoria «Acepto los Términos de uso y la Política de privacidad y confirmo que tengo 18 años o más». Enlaces legales en Más, en el inicio de sesión y pie «© FixRight Home Renovations LLC · SolviPath».
+- **Eliminar cuenta y datos:** dos pasos (escribir ELIMINAR), borra datos y usuario de Auth con la función `delete-account`, cierra sesión y borra la copia local. La migración `20261120000000_v2_0_eliminacion.sql` hace que las sugerencias y las tablas heredadas `debt_private.*` se borren en cascada.
+- **Solicitudes sin la app:** el formulario de `/eliminar-cuenta.html` inserta en `solicitudes_eliminacion` (RLS: solo insertar). Para verlas, en el SQL Editor de Supabase: `select creado, correo, idioma, estado from public.solicitudes_eliminacion where estado = 'pendiente' order by creado;` y, al procesarlas, `update public.solicitudes_eliminacion set estado = 'procesada', procesado = now() where id = '...';`.
 
 ## Versión 1.9 (incluye la corrección 1.8.1)
 

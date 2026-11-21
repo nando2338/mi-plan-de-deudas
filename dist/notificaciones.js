@@ -361,7 +361,7 @@
     const today = o.today || ymd(now);
     const en = o.lang === "en";
     const format = typeof o.format === "function" ? o.format : typeof root.formatMoney === "function" ? root.formatMoney : fallbackMoney;
-    const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//SolviPath//Pagos 1.9//" + (en ? "EN" : "ES"), "CALSCALE:GREGORIAN", "METHOD:PUBLISH", "X-WR-CALNAME:" + icsEscape(en ? "My payments" : "Mis pagos")];
+    const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//SolviPath//Pagos 2.0//" + (en ? "EN" : "ES"), "CALSCALE:GREGORIAN", "METHOD:PUBLISH", "X-WR-CALNAME:" + icsEscape(en ? "My payments" : "Mis pagos")];
     const used = new Set();
     let count = 0;
     (Array.isArray(debts) ? debts : []).forEach((debt, i) => {

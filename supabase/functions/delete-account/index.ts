@@ -1,6 +1,7 @@
 // Supabase Edge Function: delete-account
-// Borra la cuenta del usuario que hace la llamada (y, por "on delete cascade",
-// todas sus filas en debts, payments y user_settings).
+// Borra la cuenta del usuario que hace la llamada y, por "on delete cascade" hacia auth.users,
+// todos sus datos: debts, payments, user_settings, debt_plans, gastos_fijos, push_subscriptions,
+// push_settings, push_sent, sugerencias y las tablas heredadas de debt_private.
 //
 // Por qué hace falta: borrar un usuario de auth.users requiere la clave
 // service_role, que NUNCA puede estar en el navegador. Esta función corre en
@@ -14,7 +15,8 @@
 //     permitidos, por ejemplo "https://midominio.com". Si no se define, se
 //     acepta cualquier origen (el token sigue siendo obligatorio).
 //
-// Despliegue (cuando decidas activarla): ver README.md, sección "Eliminar cuenta".
+// Desplegada con verify_jwt=false porque la propia función valida el token con el servidor de
+// Auth (admin.auth.getUser) antes de hacer cualquier cosa. Ver README.md, sección "Eliminar cuenta".
 import { createClient } from "npm:@supabase/supabase-js@2.118.0";
 
 const allowed = (Deno.env.get("ALLOWED_ORIGINS") || "")
@@ -69,7 +71,7 @@ Deno.serve(async (req) => {
   // Explicit cleanup first (cascade would also remove these rows).
   // Best effort: every table has "on delete cascade" to auth.users, so deleting the user
   // below removes any row that remains (the service key has no direct access to some tables).
-  for (const table of ["payments", "debts", "user_settings", "debt_plans", "push_subscriptions", "push_settings"]) {
+  for (const table of ["payments", "debts", "user_settings", "debt_plans", "gastos_fijos", "push_subscriptions", "push_settings", "sugerencias"]) {
     await admin.from(table).delete().eq("user_id", uid);
   }
   const { error: delError } = await admin.auth.admin.deleteUser(uid);

@@ -1,5 +1,11 @@
 # Comprobaciones
 
+## Versión 2.0 (20 de noviembre de 2026)
+
+- Pruebas automáticas nuevas en `tests/v20.test.js` (legales ES/EN, formulario de eliminación, casilla de 18 años, enlaces, borrado de cuenta, encabezado, caché y base de datos).
+- Comprobado en la base real: solicitudes_eliminacion (RLS) y borrado en cascada.
+- No probado: registro y borrado reales desde www.solvipath.com con un usuario real, ni envío de correos.
+
 ## Versión 1.9 (rama `version-1.9`, 20 de noviembre de 2026)
 
 Ejecutar: `cd tests && npm test` (202 pruebas) y `npm run check`; `tests/push/push.deno.ts`. Archivo nuevo `tests/v19.test.js` (16 pruebas): nombre y lema en es/en, búsqueda del nombre viejo y de dominios viejos (0 resultados), motivos de error del registro, «Sin conexión» solo sin red, Reenviar correo, correo sin confirmar, pantalla de nueva contraseña (mínimo 6, persistente tras recargar, no se cierra con Escape), enlace vencido, notificaciones tras cerrar y abrir sesión, cambio de cuenta sin duplicados, permiso bloqueado, ícono nuevo y versión 1.9. **Aprobado.**

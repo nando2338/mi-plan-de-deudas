@@ -318,7 +318,7 @@ test("eliminar cuenta: confirmación en dos pasos, borra la nube y la cuenta", a
   const a = await linkedDevice(server, "a@ejemplo.test", uid, { "nando-deudas-v1": JSON.stringify([debt("d1", "Uno")]) });
   await waitFor(() => server.rowsFor(uid).length === 1);
   const dlg = a.doc.getElementById("account-dialog");
-  [...a.doc.querySelectorAll("#account-root button")].find((b) => b.textContent === "Eliminar mi cuenta y mis datos").click();
+  [...a.doc.querySelectorAll("#account-root button")].find((b) => b.textContent === "Eliminar cuenta y datos").click();
   [...dlg.querySelectorAll("button")].find((b) => b.textContent === "Continuar").click();
   const final = [...dlg.querySelectorAll("button")].find((b) => b.textContent === "Eliminar definitivamente");
   assert.equal(final.disabled, true, "deshabilitado hasta escribir la palabra");
@@ -330,9 +330,10 @@ test("eliminar cuenta: confirmación en dos pasos, borra la nube y la cuenta", a
   await waitFor(() => /se eliminaron/.test(dlg.textContent), { label: "resultado" });
   assert.equal(server.rowsFor(uid).length, 0);
   assert.equal(server.users.size, 0, "cuenta borrada por la función de servidor");
-  [...dlg.querySelectorAll("button")].find((b) => b.textContent === "Conservar en este dispositivo").click();
-  await waitFor(() => a.win.MPDDCloud.status().state === "signedOut");
-  assert.equal(a.debts().length, 1, "la copia local se conserva si el usuario lo elige");
+  // 2.0: la sesión se cierra y la copia local se borra automáticamente.
+  await waitFor(() => a.win.MPDDCloud.status().state === "signedOut", { label: "sesión cerrada" });
+  assert.equal(a.debts().length, 0, "la copia local se borra al eliminar la cuenta");
+  assert.ok([...dlg.querySelectorAll("button")].find((b) => b.textContent === "Entendido"), "botón de confirmación");
   a.close();
 });
 

@@ -125,7 +125,7 @@ test("ícono con sesión: inicial del correo y menú accesible (Escape, clic afu
   // Más keeps only account settings (no sign-in form).
   const root = h.doc.getElementById("account-root");
   assert.equal(root.querySelector("#acc-login-email"), null);
-  for (const t of ["Cambiar contraseña", "Cerrar sesión", "Eliminar mi cuenta y mis datos"]) assert.ok(byText(h, "#account-root", t), t);
+  for (const t of ["Cambiar contraseña", "Cerrar sesión", "Eliminar cuenta y datos"]) assert.ok(byText(h, "#account-root", t), t);
   // Change password.
   byText(h, "#account-root", "Cambiar contraseña").click();
   h.doc.getElementById("acc-change-password").value = "nueva12345";

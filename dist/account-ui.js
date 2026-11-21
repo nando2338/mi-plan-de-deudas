@@ -41,8 +41,11 @@
     forgot: "¿Olvidaste tu contraseña?",
     google: "Continuar con Google (próximamente)",
     googleOn: "Continuar con Google",
-    acceptA: "Acepto la",
-    acceptB: "y los",
+    acceptA: "Acepto los",
+    acceptB: "y la",
+    acceptC: "y confirmo que tengo 18 años o más",
+    copyright: "© FixRight Home Renovations LLC · SolviPath",
+    deleteLink: "Eliminar cuenta y datos",
     privacy: "Política de privacidad",
     terms: "Términos de uso",
     createBtn: "Crear cuenta",
@@ -56,7 +59,7 @@
     downloadPre: "Descargar copias previas a la sincronización",
     preLocal: "Copia de este dispositivo",
     preCloud: "Copia de la nube",
-    deleteAccount: "Eliminar mi cuenta y mis datos",
+    deleteAccount: "Eliminar cuenta y datos",
     unsyncable: "Estas deudas no se pueden sincronizar porque no cumplen las reglas de la nube (por ejemplo, un nombre de más de 80 caracteres). Edítalas para corregirlas:",
     chooseNow: "Elegir ahora",
     e_network: "Sin conexión. Tus cambios se guardan en este dispositivo y se enviarán cuando vuelva la conexión.",
@@ -95,7 +98,7 @@
     m_email: "Escribe un correo electrónico válido.",
     m_passwordLength: "La contraseña es muy corta: debe tener al menos 6 caracteres.",
     m_mismatch: "Las contraseñas no coinciden.",
-    m_terms: "Para crear la cuenta debes aceptar la política de privacidad y los términos de uso.",
+    m_terms: "Para crear la cuenta debes aceptar los Términos de uso y la Política de privacidad, y confirmar que tienes 18 años o más.",
     m_rateLimit: "Demasiados intentos. Espera unos minutos y vuelve a intentarlo.",
     m_server: "No pudimos enviar el correo. Inténtalo de nuevo en unos minutos.",
     m_weakPassword: "Esa contraseña no cumple los requisitos de seguridad. Usa una más larga y difícil de adivinar.",
@@ -136,16 +139,15 @@
     o_keep: "Conservar en este dispositivo",
     o_wipe: "Borrar de este dispositivo",
     o_backup: "Descargar respaldo",
-    d_title: "Eliminar mi cuenta y mis datos",
-    d_text1: "Se borrarán de la nube todas tus deudas, pagos, presupuesto, recordatorios y tu cuenta. Esta acción no se puede deshacer.",
-    d_text2: "Después podrás decidir si conservas o borras la copia de este dispositivo.",
+    d_title: "Eliminar cuenta y datos",
+    d_text1: "Se borrarán todas tus deudas, pagos, gastos fijos, preferencias, sugerencias asociadas, notificaciones y tu cuenta. Esta acción no se puede deshacer.",
+    d_text2: "También se borrará la copia de tus datos en este dispositivo y se cerrará tu sesión.",
     d_continue: "Continuar",
     d_type: "Para confirmar, escribe ELIMINAR en el campo:",
     d_word: "Palabra de confirmación",
     d_final: "Eliminar definitivamente",
-    d_done: "Tu cuenta y tus datos en la nube se eliminaron.",
-    d_partial: "Tus datos en la nube se eliminaron, pero la cuenta no se pudo eliminar automáticamente. Escríbenos al contacto de la política de privacidad para completarlo.",
-    d_localQuestion: "¿Qué hacemos con la copia de tus datos en este dispositivo?",
+    d_done: "Tu cuenta y tus datos se eliminaron. Se cerró tu sesión y se borró la copia de este dispositivo.",
+    d_partial: "Tus datos se eliminaron, pero la cuenta no se pudo eliminar automáticamente. Escribe a privacy@solvipath.com para completarlo.",
     backupCloudNote: "Con sesión iniciada, restaurar un respaldo también reemplaza los datos de tu cuenta en la nube.",
     noticeLocal: "Tus registros se guardan solo en este navegador y dispositivo. Descarga un respaldo con frecuencia para conservarlos o trasladarlos a otro dispositivo.",
     noticeCloud: "Tus registros se guardan en este dispositivo y se sincronizan con tu cuenta en la nube. Si no hay conexión, los cambios esperan aquí y se envían al volver. Aun así, descarga un respaldo de vez en cuando.",
@@ -261,7 +263,7 @@
   }
   function legalLinks(blank) {
     const a = (href, text) => el("a", { href, text, target: blank ? "_blank" : null, rel: blank ? "noopener" : null });
-    return [a("/privacidad.html", T.privacy), a("/terminos.html", T.terms)];
+    return [a("/privacidad.html", T.privacy), a("/terminos.html", T.terms), a("/eliminar-cuenta.html", T.deleteLink)];
   }
 
   /* ---------- panel skeleton ---------- */
@@ -270,8 +272,8 @@
   const statusLine = el("p", { class: "account-status" }, dot, el("strong", { text: T.stateLabel }), " ", stateText);
   const detail = el("p", { class: "label account-detail", role: "status", "aria-live": "polite" });
   const body = el("div", { class: "account-body" });
-  const [pl, tl] = legalLinks(false);
-  root.append(el("p", { class: "label", text: T.intro }), statusLine, detail, body, el("p", { class: "label legal-links" }, pl, " · ", tl));
+  const [pl, tl, dl] = legalLinks(false);
+  root.append(el("p", { class: "label", text: T.intro }), statusLine, detail, body, el("p", { class: "label legal-links" }, pl, " · ", tl, " · ", dl));
 
   let view = null; // "disabled" | "signedOut" | "recovery" | "signedIn"
   let tab = "login";
@@ -297,7 +299,7 @@
   const authTitle = el("h2", { id: "account-auth-title" });
   const authDetail = el("p", { class: "account-msg", role: "status", "aria-live": "polite" });
   const authBody = el("div", { class: "account-auth-body" });
-  const [apl, atl] = legalLinks(true);
+  const [apl, atl, adl] = legalLinks(true);
   authDialog.append(
     el(
       "div",
@@ -307,7 +309,8 @@
       el("p", { class: "label", text: T.intro }),
       authDetail,
       authBody,
-      el("p", { class: "label legal-links" }, apl, " · ", atl),
+      el("p", { class: "label legal-links" }, apl, " · ", atl, " · ", adl),
+      el("p", { class: "label auth-copyright", text: T.copyright }),
       el("div", { class: "modalbuttons" }, btn(T.close, () => closeAuth(), "cancel")),
     ),
   );
@@ -399,7 +402,7 @@
       const check = el("input", { type: "checkbox", id: "acc-accept", required: true });
       check.checked = false;
       const [p, t] = legalLinks(true);
-      const accept = el("label", { class: "account-accept", for: "acc-accept" }, check, " ", el("span", { text: T.acceptA }), " ", p, " ", el("span", { text: T.acceptB }), " ", t, ".");
+      const accept = el("label", { class: "account-accept", for: "acc-accept" }, check, " ", el("span", { text: T.acceptA }), " ", t, " ", el("span", { text: T.acceptB }), " ", p, " ", el("span", { text: T.acceptC }), ".");
       const msg = message();
       const resendS = resendButton(form, msg, () => email.input.value);
       form.append(email.wrap, pass.wrap, pass2.wrap, accept, el("div", { class: "actions" }, btn(T.createBtn, null, "save", "submit")), googleButton(), msg, resendS);
@@ -708,7 +711,9 @@
         final.disabled = false;
         return say(msg, r.error === "network" || r.error === "offline" ? "e_network" : "e_generic", true);
       }
-      openDialog([el("h2", { text: T.d_title }), el("p", { text: r.accountDeleted ? T.d_done : T.d_partial }), ...localChoice(null, T.d_localQuestion)], true);
+      // 2.0: cerrar sesión y borrar la copia local sin preguntar, y confirmar.
+      await Cloud.signOut({ keepLocal: false, reload: false });
+      openDialog([el("h2", { text: T.d_title }), el("p", { class: "account-deleted", text: r.accountDeleted ? T.d_done : T.d_partial }), el("div", { class: "modalbuttons" }, btn(T.ok, () => (closeDialog(), location.reload()), "save"))], true);
     }, "save danger");
     final.disabled = true;
     word.input.addEventListener("input", () => {

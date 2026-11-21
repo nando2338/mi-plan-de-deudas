@@ -76,7 +76,7 @@ test("el panel Cuenta y el encabezado se muestran en inglés", async () => {
   assert.match(text, /Optional: create an account/);
   assert.doesNotMatch(text, /Opcional: crea una cuenta/);
   assert.match(h.doc.getElementById("data-status").textContent, /DATA ON THIS DEVICE/);
-  assert.match(h.doc.querySelector(".legal-links").textContent, /Privacy policy/);
+  assert.match(h.doc.querySelector(".legal-links").textContent, /Privacy Policy/);
 });
 
 test("modo sin cuenta: flujos existentes intactos (agregar, pagar, ordenar, plan, recordatorios)", async () => {

@@ -13,3 +13,7 @@ verify_jwt = false
 
 [functions.tasa-euro]
 verify_jwt = false
+
+# delete-account: la función valida ella misma el token del usuario (getUser) y solo borra a quien lo envía.
+[functions.delete-account]
+verify_jwt = false

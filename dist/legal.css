@@ -1,8 +1,22 @@
-*{box-sizing:border-box}body{margin:0;background:#f4f5ef;color:#142a28;font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+*{box-sizing:border-box}body{margin:0;background:#f4f5ef;color:#142a28;font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
 header{background:#0b1f1d;color:#fff;padding:16px max(20px,calc((100vw - 820px)/2));display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
-header a{color:#d6edb2;font-weight:700;text-decoration:none}.langs button{background:transparent;color:#fff;border:1px solid #3d5a54;border-radius:8px;padding:6px 10px;margin-left:6px;cursor:pointer;font:inherit}
-.langs button[aria-pressed="true"]{background:#d6edb2;color:#163c2b}
-main{max-width:820px;margin:24px auto 60px;padding:0 20px}section{background:#fff;border:1px solid #e1e9e1;border-radius:16px;padding:24px}
-h1{font-size:26px;letter-spacing:-.02em;margin:10px 0 4px}h2{font-size:18px;margin:26px 0 6px}.meta{color:#657875;font-size:13px}
-.draft{background:#fff4e5;border:1px solid #f0c98b;border-radius:10px;padding:12px 14px;color:#6b4a12}
-mark{background:#fff09a;padding:0 3px;border-radius:3px;font-weight:700}a{color:#176849}.other{margin-top:18px}
+.legal-brand{display:flex;align-items:center;gap:12px;color:#fff;text-decoration:none;min-width:0}
+.legal-brand img{display:block;width:44px;height:44px;border-radius:12px;object-fit:cover;flex:none}
+.legal-brand-text{display:flex;flex-direction:column;line-height:1.2;min-width:0}
+.legal-brand-text strong{font-size:22px;font-weight:800}.legal-brand-text small{font-size:13px;color:#d6edb2;margin-top:2px}
+.langs{display:flex;gap:6px}.langs button{background:transparent;color:#fff;border:1px solid #5b7a73;border-radius:8px;padding:8px 12px;cursor:pointer;font:inherit;font-size:14px;min-height:40px}
+.langs button[aria-pressed="true"]{background:#d6edb2;color:#163c2b;border-color:#d6edb2;font-weight:700}
+main{max-width:820px;margin:20px auto 30px;padding:0 20px}.back{margin:0 0 12px;font-size:14px}
+section{background:#fff;border:1px solid #e1e9e1;border-radius:16px;padding:24px}
+h1{font-size:26px;letter-spacing:-.02em;margin:4px 0 6px;line-height:1.2}h2{font-size:18px;margin:26px 0 6px;line-height:1.3}
+.meta{color:#4f625f;font-size:14px}p,li{overflow-wrap:anywhere}ul{padding-left:22px}li{margin:4px 0}
+a{color:#176849}
+footer{max-width:820px;margin:0 auto 50px;padding:0 20px;color:#4f625f;font-size:13px}footer p{margin:4px 0}
+/* eliminar-cuenta.html */
+.delete-form{display:grid;gap:10px;margin:16px 0}.delete-form label{font-weight:700;font-size:14px}
+.delete-form input[type=email]{width:100%;border:1px solid #b9c9bf;border-radius:10px;padding:12px;font:inherit;background:#fff;color:#142a28}
+.delete-form button{border:0;background:#ae4031;color:#fff;border-radius:10px;padding:12px 16px;font:inherit;font-weight:700;cursor:pointer;min-height:44px}
+.delete-form button:disabled{opacity:.6;cursor:not-allowed}
+.delete-msg{margin:6px 0 0;padding:12px 14px;border-radius:10px;background:#edf3e8;border:1px solid #dce8d5;color:#2f4a2f}.delete-msg[hidden]{display:none}.delete-msg.err{background:#fbeceb;border-color:#efc9c1;color:#8a2f23}
+.hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
+@media(max-width:480px){section{padding:18px}h1{font-size:23px}.legal-brand-text strong{font-size:20px}}
