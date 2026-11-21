@@ -70,7 +70,7 @@ function daysBetween(a: string, b: string): number {
 
 const TEXT = {
   es: {
-    title: "Mi Plan de Deudas",
+    title: "SolviPath",
     tomorrow: (n: string, m: string) => `Mañana vence ${n}: ${m}`,
     inDays: (n: string, d: number, m: string) => `${n} vence en ${d} días: ${m}`,
     today: (n: string, m: string) => `Hoy vence ${n}: ${m}`,
@@ -80,7 +80,7 @@ const TEXT = {
     overdue: (n: string) => `${n} está vencida`,
   },
   en: {
-    title: "My Debt Plan",
+    title: "SolviPath",
     tomorrow: (n: string, m: string) => `${n} is due tomorrow: ${m}`,
     inDays: (n: string, d: number, m: string) => `${n} is due in ${d} days: ${m}`,
     today: (n: string, m: string) => `${n} is due today: ${m}`,

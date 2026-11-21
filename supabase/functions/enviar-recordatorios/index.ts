@@ -23,7 +23,7 @@ const CORS = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };
-const SUBJECT = Deno.env.get("VAPID_SUBJECT") || "https://glistening-youtiao-b5f1d2.netlify.app";
+const SUBJECT = Deno.env.get("VAPID_SUBJECT") || "https://www.solvipath.com";
 const MAX_PER_USER = 6;
 
 function json(body: unknown, status = 200, maxAge = 0) {

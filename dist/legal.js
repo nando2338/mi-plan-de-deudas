@@ -14,7 +14,7 @@
     for (const n of document.querySelectorAll("[data-es][data-en]")) n.textContent = n.dataset[l];
     for (const b of document.querySelectorAll("[data-lang]")) b.setAttribute("aria-pressed", String(b.dataset.lang === l));
     const h1 = document.querySelector("main > section:not([hidden]) h1");
-    if (h1) document.title = h1.textContent + (l === "en" ? " · My Debt Plan" : " · Mi Plan de Deudas");
+    if (h1) document.title = h1.textContent + (l === "en" ? " · SolviPath" : " · SolviPath");
   }
   for (const b of document.querySelectorAll("[data-lang]")) b.addEventListener("click", () => apply(b.dataset.lang));
   apply(lang);

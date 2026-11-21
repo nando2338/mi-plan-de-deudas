@@ -1,5 +1,5 @@
 // Cambia en cada versión publicada: así el navegador detecta la versión nueva.
-const CACHE='mpd-cache-v1.8';
+const CACHE='mpd-cache-v1.9';
 const ASSETS=['/manifest.webmanifest','/logo-192.png','/logo-512.png','/logo-maskable-512.png','/logo-180.png','/logo-32.png','/logo-encabezado.png','/app-version.js','/existing-install.js','/navigation-views.css','/navigation-views.js','/education-help-v2.css','/education-help-v2.js','/backup-validation.js','/backup-safe.js','/backup-preferences.js','/debt-engine.js','/reminders.js','/reminders-ui.js','/reminders-today.js','/foreground-notices.js','/foreground-notices-ui.js','/i18n.js','/config.js','/cloud-core.js','/cloud-sync.js','/account-ui.js','/account.css','/privacidad.html','/terminos.html','/legal.css','/legal.js','/money.js','/schedule-core.js','/gastos-core.js','/gastos-store.js','/calendario.js','/grafico.js','/ajustes-v12.js','/actualizacion.js','/v12.css','/plan-core.js','/plan-ui.js','/plan.css','/notificaciones.js','/metodos.js','/metodos.css','/sugerencias.js','/sugerencias.css','/resaltado.js','/resaltado.css','/gastos-ui.js','/gastos.css'];
 // Exact, version-pinned supabase-js file (verified by SRI in the page). It contains no user data.
 const LIB='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js';
@@ -32,7 +32,7 @@ if(ASSETS.includes(url.pathname))event.respondWith(caches.open(CACHE).then(cache
 const PUSH_DEFAULT_URL='/?vista=calendario';
 function pushUrl(raw){try{const u=new URL(typeof raw==='string'?raw:PUSH_DEFAULT_URL,self.location.origin);return u.origin===self.location.origin?u.pathname+u.search:PUSH_DEFAULT_URL}catch(_){return PUSH_DEFAULT_URL}}
 self.addEventListener('push',event=>{let d=null;try{d=event.data?JSON.parse(event.data.text()):null}catch(_){d=null}if(!d||typeof d!=='object'||Array.isArray(d))d={};
-const title=typeof d.title==='string'&&d.title.trim()?d.title.slice(0,120):'Mi Plan de Deudas';const body=typeof d.body==='string'?d.body.slice(0,400):'';const tag=typeof d.tag==='string'&&d.tag?d.tag.slice(0,120):'mpdd-recordatorio';
+const title=typeof d.title==='string'&&d.title.trim()?d.title.slice(0,120):'SolviPath';const body=typeof d.body==='string'?d.body.slice(0,400):'';const tag=typeof d.tag==='string'&&d.tag?d.tag.slice(0,120):'mpdd-recordatorio';
 event.waitUntil(self.registration.showNotification(title,{body,icon:'/logo-192.png',badge:'/logo-192.png',tag,data:{url:pushUrl(d.url)}}))});
 // Tap: focus an open window of the app (and show the requested tab) or open the app.
 self.addEventListener('notificationclick',event=>{event.notification.close();const url=pushUrl(event.notification.data&&event.notification.data.url);

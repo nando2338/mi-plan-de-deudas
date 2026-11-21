@@ -1,5 +1,11 @@
 # Comprobaciones
 
+## Versión 1.9 (rama `version-1.9`, 20 de noviembre de 2026)
+
+Ejecutar: `cd tests && npm test` (202 pruebas) y `npm run check`; `tests/push/push.deno.ts`. Archivo nuevo `tests/v19.test.js` (16 pruebas): nombre y lema en es/en, búsqueda del nombre viejo y de dominios viejos (0 resultados), motivos de error del registro, «Sin conexión» solo sin red, Reenviar correo, correo sin confirmar, pantalla de nueva contraseña (mínimo 6, persistente tras recargar, no se cierra con Escape), enlace vencido, notificaciones tras cerrar y abrir sesión, cambio de cuenta sin duplicados, permiso bloqueado, ícono nuevo y versión 1.9. **Aprobado.**
+
+Revisión visual (teléfono y escritorio, es/en): encabezado e inicio de sesión sin desbordes ni errores de JavaScript.
+
 ## Versión 1.8 (rama `version-1.8`, 19 de noviembre de 2026)
 
 Ejecutar: `cd tests && npm test` (185 pruebas) y `npm run check`. Pruebas Deno: `tests/push/push.deno.ts`, `tests/push/ecb.deno.ts`, `tests/trm/trm.deno.ts`.

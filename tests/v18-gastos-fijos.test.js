@@ -363,7 +363,7 @@ test(".ics: gastos trimestrales y anuales con su RRULE, días 29–31 y alarma d
   assert.match(of("Jardín"), /DTSTART;VALUE=DATE:20261205\r\n/);
   for (const e of ev) {
     assert.match(e, /TRIGGER:-P1D\r\n/);
-    assert.match(e, /UID:gasto-[A-Za-z0-9_-]+@mi-plan-de-deudas\r\n/);
+    assert.match(e, /UID:gasto-[A-Za-z0-9_-]+@solvipath.com\r\n/);
   }
   assert.match(of("Predial"), /DESCRIPTION:Monto: 1200 USD\\nFrecuencia: Anual/);
 });

@@ -336,7 +336,7 @@ test("eliminar cuenta: confirmación en dos pasos, borra la nube y la cuenta", a
   a.close();
 });
 
-test("registro: casilla obligatoria sin marcar, contraseña de 8+ y mensajes que no revelan si el correo existe", async () => {
+test("registro: casilla obligatoria sin marcar, contraseña de 6+ y mensajes claros (correo nuevo / ya registrado)", async () => {
   const server = new FakeServer();
   server.addUser("existe@ejemplo.test", "x12345678");
   const h = load({ config: "test", server, storage: ES });
@@ -356,7 +356,7 @@ test("registro: casilla obligatoria sin marcar, contraseña de 8+ y mensajes que
   h.doc.getElementById("acc-signup-email").value = "nuevo@ejemplo.test";
   h.doc.getElementById("acc-signup-password").value = "corta";
   h.doc.getElementById("acc-signup-password2").value = "corta";
-  assert.match(await submit(), /al menos 8/);
+  assert.match(await submit(), /al menos 6/);
   h.doc.getElementById("acc-signup-password").value = h.doc.getElementById("acc-signup-password2").value = "suficiente123";
   assert.match(await submit(), /debes aceptar/);
   assert.equal(server.calls.length, 0, "nada se envía sin aceptar");
@@ -365,12 +365,14 @@ test("registro: casilla obligatoria sin marcar, contraseña de 8+ y mensajes que
     h.doc.getElementById("acc-signup-email").value = email;
     h.doc.getElementById("acc-signup-password").value = h.doc.getElementById("acc-signup-password2").value = "suficiente123";
     await submit();
-    return waitFor(() => /Si el correo es válido/.test(form.querySelector(".account-msg").textContent) && form.querySelector(".account-msg").textContent);
+    return waitFor(() => /Te enviamos un correo|ya está registrado/.test(form.querySelector(".account-msg").textContent) && form.querySelector(".account-msg").textContent);
   };
   const msgNew = await signUpAs("nuevo@ejemplo.test");
+  assert.ok(form.querySelector(".account-resend") && !form.querySelector(".account-resend").hidden, "botón Reenviar correo");
   assert.equal(h.doc.getElementById("acc-signup-password").value, "", "la contraseña no se queda en el formulario");
   const msgExisting = await signUpAs("existe@ejemplo.test");
-  assert.equal(msgNew, msgExisting, "mismo mensaje exista o no el correo");
+  assert.match(msgNew, /Te enviamos un correo para confirmar tu cuenta\. Revisa también la carpeta de spam/);
+  assert.match(msgExisting, /ya está registrado/);
   const signUp = server.calls.find((c) => c[0] === "signUp");
   assert.ok(signUp[2].terms_accepted_at, "se registra la aceptación");
   // Magic link: same neutral message for unknown emails.
@@ -401,7 +403,7 @@ test("datos de la nube con HTML no se interpretan (sin inyección)", async () =>
   server.push(uid, [{ id: "d1", deleted: true, base: row2.updated_at }], {});
   await a.win.MPDDCloud.syncNow();
   await waitFor(() => a.debts().length === 0);
-  assert.equal(a.doc.querySelectorAll("img:not(.brand img)").length, 0);
+  assert.equal(a.doc.querySelectorAll("img:not(.brand img):not(.auth-brand img)").length, 0);
   assert.equal(a.win.__pwned, undefined);
   assert.ok(a.doc.getElementById("sync-notices").textContent.includes(evil), "se muestra como texto");
   a.close();
@@ -487,4 +489,21 @@ test("un registro pendiente que no se puede subir no genera solicitudes repetida
   assert.equal(Object.prototype.l, undefined, "sin contaminación de prototipos");
   assert.equal(a.win.Object.prototype.l, undefined);
   assert.equal(a.win.MPDDCloud.status().unsyncable.length, 2);
+});
+
+test("registro: un error 500 del servidor (correo) no se muestra como 'revisa tu correo' ni como 'sin conexión'", async () => {
+  const server = new FakeServer();
+  server.signupError = true;
+  const h = load({ config: "test", server, storage: ES });
+  await sleep(50);
+  h.doc.querySelector(".account-header .account-enter").click();
+  [...h.doc.querySelectorAll("#account-auth-dialog button")].find((b) => b.textContent === "Crear cuenta").click();
+  h.doc.getElementById("acc-accept").checked = true;
+  const form = h.doc.querySelector("#account-auth-dialog form");
+  h.doc.getElementById("acc-signup-email").value = "nuevo@ejemplo.test";
+  h.doc.getElementById("acc-signup-password").value = h.doc.getElementById("acc-signup-password2").value = "suficiente123";
+  form.dispatchEvent(new h.win.Event("submit", { cancelable: true }));
+  const msg = await waitFor(() => /No pudimos enviar el correo/.test(form.querySelector(".account-msg").textContent) && form.querySelector(".account-msg").textContent);
+  assert.doesNotMatch(msg, /Sin conexión|Si el correo es válido/);
+  h.close();
 });

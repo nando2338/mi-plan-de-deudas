@@ -178,7 +178,7 @@ test("prueba sin dispositivos: el servidor responde 404 y se explica", async () 
   assert.equal(server.pushCalls.filter((c) => c.method === "POST").length, 1);
 });
 
-test("cerrar sesión borra primero la suscripción de este dispositivo", async () => {
+test("cerrar sesión borra primero la fila de este dispositivo pero conserva la suscripción y el permiso del navegador", async () => {
   const server = new FakeServer();
   const env = pushEnv();
   const { h } = await signedInDevice(server, env);
@@ -189,7 +189,7 @@ test("cerrar sesión borra primero la suscripción de este dispositivo", async (
   const out = server.calls.findIndex((c) => c[0] === "signOut");
   assert.ok(del >= 0 && out > del, "la fila se borra antes de cerrar sesión");
   assert.equal(server.pushSubs.length, 0);
-  assert.equal(env.state.unsubscribed, 1);
+  assert.equal(env.state.unsubscribed, 0, "la suscripción del navegador se conserva");
   assert.equal(h.win.MPDDCloud.status().userId, null);
 });
 
@@ -279,7 +279,7 @@ test(".ics: estructura, CRLF, plegado, escape, RRULE y VALARM", () => {
   assert.equal(lines.filter((l) => l === "DTSTAMP:20261116T130509Z").length, 4);
   const uids = lines.filter((l) => l.startsWith("UID:"));
   assert.equal(new Set(uids).size, 4);
-  assert.ok(uids.every((u) => /^UID:[A-Za-z0-9_-]+@mi-plan-de-deudas$/.test(u)));
+  assert.ok(uids.every((u) => /^UID:[A-Za-z0-9_-]+@solvipath.com$/.test(u)));
   const ev = (summary) => {
     const i = lines.indexOf(summary);
     assert.ok(i > 0, "falta " + summary);
@@ -399,7 +399,7 @@ test("sw.js: push muestra la notificación y el toque enfoca o abre el Calendari
   assert.equal(shown[0].options.data.url, "/?vista=calendario");
   // Broken or foreign payloads still show a safe notification.
   await fire("push", { data: { text: () => "{no es json" } });
-  assert.equal(shown[1].title, "Mi Plan de Deudas");
+  assert.equal(shown[1].title, "SolviPath");
   assert.equal(shown[1].options.data.url, "/?vista=calendario");
   await fire("push", { data: null });
   assert.equal(shown.length, 3);
