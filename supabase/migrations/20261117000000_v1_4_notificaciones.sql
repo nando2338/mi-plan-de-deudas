@@ -136,7 +136,7 @@ do $$
 begin
   if not exists (select 1 from vault.secrets where name = 'mpdd_cron_secret') then
     perform vault.create_secret(encode(extensions.gen_random_bytes(32), 'hex'), 'mpdd_cron_secret',
-      'Mi Plan de Deudas 1.4: autoriza a pg_cron a llamar enviar-recordatorios');
+      'SolviPath 1.4: autoriza a pg_cron a llamar enviar-recordatorios');
   end if;
 end;
 $$;
@@ -166,8 +166,8 @@ begin
     if p_public is null or p_private is null or char_length(p_public) < 80 or char_length(p_private) < 40 then
       raise exception 'claves inválidas';
     end if;
-    perform vault.create_secret(p_private, 'mpdd_vapid_private', 'Mi Plan de Deudas 1.4: clave privada VAPID (JWK)');
-    perform vault.create_secret(p_public, 'mpdd_vapid_public', 'Mi Plan de Deudas 1.4: clave pública VAPID');
+    perform vault.create_secret(p_private, 'mpdd_vapid_private', 'SolviPath 1.4: clave privada VAPID (JWK)');
+    perform vault.create_secret(p_public, 'mpdd_vapid_public', 'SolviPath 1.4: clave pública VAPID');
   end if;
   return public.mpdd_push_keys();
 end;

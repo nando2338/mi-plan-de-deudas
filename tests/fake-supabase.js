@@ -237,6 +237,7 @@ function createFakeLib(server, win) {
     };
     const emit = (event, session) => win.setTimeout(() => listeners.forEach((fn) => fn(event, session)), 0);
     const net = () => (server.offline ? { data: null, error: { name: "AuthRetryableFetchError", message: "Failed to fetch", status: 0 } } : null);
+    server.emitAuth = (event, session) => emit(event, session);
     const client = {
       url, key, options,
       auth: {
@@ -254,6 +255,7 @@ function createFakeLib(server, win) {
           if (off) return off;
           const u = server.users.get(email);
           if (!u || u.password !== password) return { data: {}, error: { name: "AuthApiError", status: 400, code: "invalid_credentials", message: "Invalid login credentials" } };
+          if (u.confirmed === false) return { data: {}, error: { name: "AuthApiError", status: 400, code: "email_not_confirmed", message: "Email not confirmed" } };
           const session = { access_token: "fake-token-" + u.id, user: { id: u.id, email } };
           ls.setItem(storageKey, JSON.stringify(session));
           emit("SIGNED_IN", session);
@@ -263,7 +265,7 @@ function createFakeLib(server, win) {
           server.calls.push(["signUp", email, o && o.data]);
           const off = net();
           if (off) return off;
-          if (server.signupError) return { data: {}, error: { name: "AuthApiError", status: 500, code: "unexpected_failure", message: "Error sending confirmation email" } };
+          if (server.signupError) return { data: {}, error: server.signupError === true ? { name: "AuthApiError", status: 500, code: "unexpected_failure", message: "Error sending confirmation email" } : server.signupError };
           if (!server.users.has(email)) {
             const id = server.addUser(email, password);
             server.users.get(email).confirmed = false;
@@ -289,6 +291,10 @@ function createFakeLib(server, win) {
         async signInWithOAuth() {
           server.calls.push(["oauth"]);
           return { data: {}, error: null };
+        },
+        async resend(args) {
+          server.calls.push(["resend", args && args.email, args && args.options]);
+          return net() || (server.resendError ? { data: {}, error: server.resendError } : { data: {}, error: null });
         },
         async signOut() {
           server.calls.push(["signOut"]);

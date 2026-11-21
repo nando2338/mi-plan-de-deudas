@@ -33,9 +33,9 @@
     tabSignup: "Crear cuenta",
     email: "Correo electrónico",
     password: "Contraseña",
-    passwordNew: "Contraseña (mínimo 8 caracteres)",
+    passwordNew: "Contraseña (mínimo 6 caracteres)",
     passwordRepeat: "Repite la contraseña",
-    passwordRecovery: "Nueva contraseña (mínimo 8 caracteres)",
+    passwordRecovery: "Nueva contraseña (mínimo 6 caracteres)",
     enter: "Entrar",
     magic: "Enviarme un enlace mágico",
     forgot: "¿Olvidaste tu contraseña?",
@@ -71,16 +71,33 @@
     e_wipeLocked: "Sesión cerrada. No se borró la copia local porque hay una recuperación pendiente.",
     e_remoteReset: "Tus datos en la nube se borraron desde otro dispositivo. Se cerró la sesión y se conservó la copia de este dispositivo; si quieres volver a subirla, inicia sesión otra vez.",
     e_generic: "No se pudo completar la operación. Inténtalo de nuevo.",
-    m_checkSignup: "Si el correo es válido, te enviamos un mensaje para confirmar la cuenta. Revisa también la carpeta de spam.",
+    m_checkSignup: "Te enviamos un correo para confirmar tu cuenta. Revisa también la carpeta de spam.",
+    resend: "Reenviar correo",
+    m_resent: "Listo, te reenviamos el correo. Revisa también la carpeta de spam.",
+    m_notConfirmed: "Aún no has confirmado tu correo. Abre el mensaje que te enviamos o pide que te lo reenviemos.",
+    m_userExists: "Ese correo ya está registrado. Inicia sesión o recupera tu contraseña.",
+    m_emailInvalid: "El correo no es válido. Revísalo e inténtalo de nuevo.",
+    m_generic: "Algo salió mal. Inténtalo de nuevo.",
+    m_linkExpired: "El enlace venció o ya no es válido. Pide otro correo.",
+    tagline: "Tu camino a la tranquilidad financiera",
+    recNewTitle: "Crea tu nueva contraseña",
+    recSave: "Guardar contraseña",
+    recDone: "Contraseña actualizada",
+    recContinue: "Terminar de crear tu nueva contraseña",
+    recSignOut: "Cerrar sesión",
+    expTitle: "El enlace venció o no es válido",
+    expText: "Los enlaces del correo duran poco tiempo y solo sirven una vez. Escribe tu correo y te enviamos otro.",
+    expSend: "Pedir otro correo",
+    expClose: "Cerrar",
     m_checkMagic: "Si hay una cuenta con ese correo, te enviamos un enlace para entrar. Ábrelo en este mismo navegador.",
     m_checkReset: "Si hay una cuenta con ese correo, te enviamos un enlace para cambiar la contraseña. Ábrelo en este mismo navegador.",
     m_credentials: "No se pudo iniciar sesión. Revisa el correo y la contraseña. Si acabas de crear la cuenta, confírmala desde el correo que te enviamos.",
     m_email: "Escribe un correo electrónico válido.",
-    m_passwordLength: "La contraseña debe tener al menos 8 caracteres.",
+    m_passwordLength: "La contraseña es muy corta: debe tener al menos 6 caracteres.",
     m_mismatch: "Las contraseñas no coinciden.",
     m_terms: "Para crear la cuenta debes aceptar la política de privacidad y los términos de uso.",
     m_rateLimit: "Demasiados intentos. Espera unos minutos y vuelve a intentarlo.",
-    m_server: "No pudimos completar esto por un problema del servicio (por ejemplo, el envío del correo). Inténtalo de nuevo en unos minutos. Tus datos están a salvo.",
+    m_server: "No pudimos enviar el correo. Inténtalo de nuevo en unos minutos.",
     m_weakPassword: "Esa contraseña no cumple los requisitos de seguridad. Usa una más larga y difícil de adivinar.",
     m_samePassword: "La nueva contraseña debe ser distinta de la anterior.",
     m_passwordUpdated: "Contraseña actualizada.",
@@ -260,6 +277,22 @@
   let tab = "login";
 
   /* ---------- sign-in / create-account dialog (1.4) ---------- */
+  function brandBlock() {
+    return el("div", { class: "auth-brand" }, el("img", { src: "/logo-encabezado.png", alt: "", width: "44", height: "44" }), el("strong", { class: "auth-brand-name", text: "SolviPath" }), el("span", { class: "auth-brand-tagline", text: T.tagline }));
+  }
+  /* Botón "Reenviar correo": aparece después de crear la cuenta o si falta confirmar el correo. */
+  function resendButton(form, msg, getEmail) {
+    const b = btn(T.resend, async () => {
+      busy(form, true);
+      say(msg, "m_working");
+      const r = await Cloud.resendSignup(getEmail());
+      busy(form, false);
+      say(msg, r.ok ? "m_resent" : resultKey(r), !r.ok);
+    });
+    b.hidden = true;
+    b.classList.add("account-resend");
+    return b;
+  }
   const authDialog = el("dialog", { id: "account-auth-dialog", class: "account-dialog account-auth", "aria-labelledby": "account-auth-title" });
   const authTitle = el("h2", { id: "account-auth-title" });
   const authDetail = el("p", { class: "account-msg", role: "status", "aria-live": "polite" });
@@ -269,6 +302,7 @@
     el(
       "div",
       { class: "modal" },
+      brandBlock(),
       authTitle,
       el("p", { class: "label", text: T.intro }),
       authDetail,
@@ -325,6 +359,7 @@
       const email = input("acc-login-email", T.email, "email", { autocomplete: "email", required: true, maxlength: "254" });
       const pass = input("acc-login-password", T.password, "password", { autocomplete: "current-password" });
       const msg = message();
+      const resendL = resendButton(form, msg, () => email.input.value);
       const magic = btn(T.magic, async () => {
         busy(form, true);
         say(msg, "m_working");
@@ -339,43 +374,51 @@
         busy(form, false);
         say(msg, r.ok ? "m_checkReset" : resultKey(r), !r.ok);
       });
-      form.append(email.wrap, pass.wrap, el("div", { class: "actions" }, btn(T.enter, null, "save", "submit")), el("div", { class: "actions account-secondary" }, magic, forgot), googleButton(), msg);
+      form.append(email.wrap, pass.wrap, el("div", { class: "actions" }, btn(T.enter, null, "save", "submit")), el("div", { class: "actions account-secondary" }, magic, forgot), googleButton(), msg, resendL);
       form.onsubmit = async (e) => {
         e.preventDefault();
         busy(form, true);
         say(msg, "m_working");
+        resendL.hidden = true;
         const r = await Cloud.signIn(email.input.value, pass.input.value);
         busy(form, false);
         if (r.ok) {
           pass.input.value = "";
           msg.textContent = "";
-        } else say(msg, resultKey(r), true);
+        } else {
+          say(msg, resultKey(r), true);
+          resendL.hidden = r.error !== "notConfirmed";
+        }
       };
       body.append(form);
     } else {
       const form = el("form", { class: "account-form", novalidate: true });
       const email = input("acc-signup-email", T.email, "email", { autocomplete: "email", required: true, maxlength: "254" });
-      const pass = input("acc-signup-password", T.passwordNew, "password", { autocomplete: "new-password", minlength: "8" });
-      const pass2 = input("acc-signup-password2", T.passwordRepeat, "password", { autocomplete: "new-password", minlength: "8" });
+      const pass = input("acc-signup-password", T.passwordNew, "password", { autocomplete: "new-password", minlength: "6" });
+      const pass2 = input("acc-signup-password2", T.passwordRepeat, "password", { autocomplete: "new-password", minlength: "6" });
       const check = el("input", { type: "checkbox", id: "acc-accept", required: true });
       check.checked = false;
       const [p, t] = legalLinks(true);
       const accept = el("label", { class: "account-accept", for: "acc-accept" }, check, " ", el("span", { text: T.acceptA }), " ", p, " ", el("span", { text: T.acceptB }), " ", t, ".");
       const msg = message();
-      form.append(email.wrap, pass.wrap, pass2.wrap, accept, el("div", { class: "actions" }, btn(T.createBtn, null, "save", "submit")), googleButton(), msg);
+      const resendS = resendButton(form, msg, () => email.input.value);
+      form.append(email.wrap, pass.wrap, pass2.wrap, accept, el("div", { class: "actions" }, btn(T.createBtn, null, "save", "submit")), googleButton(), msg, resendS);
       form.onsubmit = async (e) => {
         e.preventDefault();
-        if (pass.input.value.length < 8) return say(msg, "m_passwordLength", true);
+        if (pass.input.value.length < 6) return say(msg, "m_passwordLength", true);
         if (pass.input.value !== pass2.input.value) return say(msg, "m_mismatch", true);
         if (!check.checked) return say(msg, "m_terms", true);
         busy(form, true);
         say(msg, "m_working");
+        resendS.hidden = true;
         const r = await Cloud.signUp(email.input.value, pass.input.value, check.checked === true);
         busy(form, false);
         if (r.ok) {
           pass.input.value = pass2.input.value = "";
-          if (r.result === "checkEmail") say(msg, "m_checkSignup");
-          else msg.textContent = "";
+          if (r.result === "checkEmail") {
+            say(msg, "m_checkSignup");
+            resendS.hidden = false;
+          } else msg.textContent = "";
         } else say(msg, resultKey(r), true);
       };
       body.append(form);
@@ -384,7 +427,7 @@
   function resultKey(r) {
     if (!r || r.ok) return "e_generic";
     if (r.error === "network") return "e_network";
-    return T["m_" + r.error] ? "m_" + r.error : "e_generic";
+    return T["m_" + r.error] ? "m_" + r.error : "m_generic";
   }
   function googleButton() {
     const on = window.MPDD_CONFIG && window.MPDD_CONFIG.googleEnabled === true;
@@ -401,25 +444,93 @@
     body.replaceChildren(el("div", { class: "actions" }, btn(T.enter, () => openAuth({ tab: "login" }), "save account-panel-enter")));
   }
   function renderRecovery() {
-    body.replaceChildren();
+    body.replaceChildren(el("div", { class: "actions" }, btn(T.recContinue, () => openRecovery(), "save")));
+    openRecovery();
+  }
+
+  /* ---------- 1.9: pantalla "Crea tu nueva contraseña" (a pantalla completa y persistente) ---------- */
+  const recDialog = el("dialog", { id: "recovery-dialog", class: "account-dialog account-auth account-recovery", "aria-labelledby": "recovery-title" });
+  recDialog.addEventListener("cancel", (e) => e.preventDefault());
+  document.body.append(recDialog);
+  let recDoneTimer = null,
+    recSuccess = false;
+  function openRecovery() {
+    if (recDialog.open) return;
+    clearTimeout(recDoneTimer);
+    recSuccess = false;
+    recDialog.replaceChildren();
     const form = el("form", { class: "account-form", novalidate: true });
-    const pass = input("acc-recovery-password", T.passwordRecovery, "password", { autocomplete: "new-password", minlength: "8" });
-    const pass2 = input("acc-recovery-password2", T.passwordRepeat, "password", { autocomplete: "new-password", minlength: "8" });
+    const pass = input("acc-recovery-password", T.passwordRecovery, "password", { autocomplete: "new-password", minlength: "6" });
+    const pass2 = input("acc-recovery-password2", T.passwordRepeat, "password", { autocomplete: "new-password", minlength: "6" });
     const msg = message();
-    form.append(el("h4", { text: T.recoveryTitle }), pass.wrap, pass2.wrap, el("div", { class: "actions" }, btn(T.saveNewPassword, null, "save", "submit")), msg);
+    form.append(pass.wrap, pass2.wrap, el("div", { class: "actions" }, btn(T.recSave, null, "save", "submit")), msg);
     form.onsubmit = async (e) => {
       e.preventDefault();
-      if (pass.input.value.length < 8) return say(msg, "m_passwordLength", true);
+      if (pass.input.value.length < 6) return say(msg, "m_passwordLength", true);
       if (pass.input.value !== pass2.input.value) return say(msg, "m_mismatch", true);
       busy(form, true);
+      say(msg, "m_working");
       const r = await Cloud.updatePassword(pass.input.value);
       busy(form, false);
       if (r.ok) {
         pass.input.value = pass2.input.value = "";
+        recSuccess = true;
+        say(msg, "recDone");
+        msg.classList.remove("error");
         say(detail, "m_passwordUpdated");
-      } else say(msg, resultKey(r), true);
+        busy(form, true);
+        recDoneTimer = setTimeout(closeRecovery, 1200);
+      } else if (r.error === "linkExpired") closeRecovery();
+      else say(msg, resultKey(r), true);
     };
-    body.append(form);
+    recDialog.append(
+      el("div", { class: "modal" }, brandBlock(), el("h2", { id: "recovery-title", text: T.recNewTitle }), form, el("div", { class: "modalbuttons" }, btn(T.recSignOut, () => Cloud.signOut({ keepLocal: true }), "cancel"))),
+    );
+    if (typeof recDialog.showModal === "function") recDialog.showModal();
+    else recDialog.setAttribute("open", "");
+    const first = recDialog.querySelector("input");
+    if (first && first.focus) first.focus();
+  }
+  function closeRecovery() {
+    clearTimeout(recDoneTimer);
+    recSuccess = false;
+    if (!recDialog.open) return;
+    if (typeof recDialog.close === "function") recDialog.close();
+    else recDialog.removeAttribute("open");
+    recDialog.replaceChildren();
+  }
+
+  /* ---------- 1.9: enlace vencido o inválido: pedir otro correo ---------- */
+  const expDialog = el("dialog", { id: "link-expired-dialog", class: "account-dialog account-auth", "aria-labelledby": "link-expired-title" });
+  document.body.append(expDialog);
+  function openExpired() {
+    if (expDialog.open) return;
+    expDialog.replaceChildren();
+    const form = el("form", { class: "account-form", novalidate: true });
+    const email = input("acc-expired-email", T.email, "email", { autocomplete: "email", required: true, maxlength: "254" });
+    const msg = message();
+    form.append(email.wrap, el("div", { class: "actions" }, btn(T.expSend, null, "save", "submit")), msg);
+    form.onsubmit = async (e) => {
+      e.preventDefault();
+      busy(form, true);
+      say(msg, "m_working");
+      const r = await Cloud.resetPassword(email.input.value);
+      busy(form, false);
+      say(msg, r.ok ? "m_checkReset" : resultKey(r), !r.ok);
+    };
+    expDialog.append(
+      el("div", { class: "modal" }, brandBlock(), el("h2", { id: "link-expired-title", text: T.expTitle }), el("p", { class: "label", text: T.expText }), form, el("div", { class: "modalbuttons" }, btn(T.expClose, closeExpired, "cancel"))),
+    );
+    if (typeof expDialog.showModal === "function") expDialog.showModal();
+    else expDialog.setAttribute("open", "");
+  }
+  function closeExpired() {
+    if (expDialog.open) {
+      if (typeof expDialog.close === "function") expDialog.close();
+      else expDialog.removeAttribute("open");
+    }
+    expDialog.replaceChildren();
+    Cloud.clearLinkExpired();
   }
   let signedInParts = null;
   function renderSignedIn(s) {
@@ -556,13 +667,13 @@
   }
   function openChangePassword() {
     const form = el("form", { class: "account-form", novalidate: true });
-    const pass = input("acc-change-password", T.passwordRecovery, "password", { autocomplete: "new-password", minlength: "8" });
-    const pass2 = input("acc-change-password2", T.passwordRepeat, "password", { autocomplete: "new-password", minlength: "8" });
+    const pass = input("acc-change-password", T.passwordRecovery, "password", { autocomplete: "new-password", minlength: "6" });
+    const pass2 = input("acc-change-password2", T.passwordRepeat, "password", { autocomplete: "new-password", minlength: "6" });
     const msg = message();
     form.append(pass.wrap, pass2.wrap, el("div", { class: "modalbuttons" }, btn(T.cancel, closeDialog, "cancel"), btn(T.saveNewPassword, null, "save", "submit")), msg);
     form.onsubmit = async (e) => {
       e.preventDefault();
-      if (pass.input.value.length < 8) return say(msg, "m_passwordLength", true);
+      if (pass.input.value.length < 6) return say(msg, "m_passwordLength", true);
       if (pass.input.value !== pass2.input.value) return say(msg, "m_mismatch", true);
       busy(form, true);
       say(msg, "m_working");
@@ -834,6 +945,9 @@
       } else if (next === "signedOut") renderPanelSignedOut();
       else if (next === "recovery") renderRecovery();
     }
+    if (s.recovery && signedIn) openRecovery();
+    else if (recDialog.open && !recSuccess) closeRecovery();
+    if (s.linkExpired) openExpired();
     if (view === "signedIn") renderSignedIn(s);
     const ek = view === "disabled" ? null : errorKey(s);
     if (ek) say(detail, ek, s.state !== "offline");

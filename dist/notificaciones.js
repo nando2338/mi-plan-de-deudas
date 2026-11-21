@@ -12,6 +12,8 @@
   // "1" while this device has a push subscription saved in the account.
   const DEVICE_KEY = "mpdd-push-device-v1";
   const AVISOS_OPT = "mpdd-foreground-notices-enabled-v1";
+  // 1.9: "1" si en este navegador se activaron las notificaciones; sobrevive al cierre de sesión.
+  const WANTED_KEY = "mpdd-push-wanted-v1";
   const JOURNAL = "nando-restore-journal-v1";
 
   /* ---------------- environment ---------------- */
@@ -190,11 +192,63 @@
     const saved = await cloud.pushSaveSubscription(sub);
     if (!saved.ok) return { ok: false, reason: saved.error || "server" };
     setDevice(win, true);
+    setWanted(win, true);
     try {
       win.localStorage.setItem(AVISOS_OPT, "true");
     } catch (_) {}
     const s = await syncSettings(win, { enabled: true });
     return { ok: true, settingsSaved: !!s.ok };
+  }
+  function setWanted(win, on) {
+    try {
+      if (on) win.localStorage.setItem(WANTED_KEY, "1");
+      else win.localStorage.removeItem(WANTED_KEY);
+    } catch (_) {}
+  }
+  function wanted(win) {
+    try {
+      return (win || root).localStorage.getItem(WANTED_KEY) === "1";
+    } catch (_) {
+      return false;
+    }
+  }
+  /* 1.9: al iniciar sesión o abrir la app con sesión, vuelve a asociar la suscripción de este
+     navegador a la cuenta activa. No pide permiso: solo actúa si el permiso ya está concedido y
+     existe una suscripción (o si el usuario la había activado y el navegador la perdió). */
+  let restoring = false;
+  async function restore(win) {
+    win = win || root;
+    if (restoring) return { ok: false, reason: "busy" };
+    restoring = true;
+    {
+      try {
+        if (detect(win) !== "ok" || !signedIn(win) || locked(win)) return { ok: false, reason: "skip" };
+        if (win.Notification.permission !== "granted") return { ok: false, reason: "permission" };
+        const reg = await registration(win);
+        if (!reg) return { ok: false, reason: "noWorker" };
+        let sub = await reg.pushManager.getSubscription();
+        if (!sub && !wanted(win)) return { ok: false, reason: "noSubscription" };
+        const cloud = win.MPDDCloud;
+        if (!sub) {
+          const key = await cloud.pushPublicKey();
+          if (!key.ok) return { ok: false, reason: key.error || "server" };
+          sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(key.publicKey) });
+        }
+        const saved = await cloud.pushSaveSubscription(sub);
+        if (!saved.ok) return { ok: false, reason: saved.error || "server" };
+        setDevice(win, true);
+        setWanted(win, true);
+        try {
+          win.localStorage.setItem(AVISOS_OPT, "true");
+        } catch (_) {}
+        const st = await syncSettings(win, { enabled: true });
+        return { ok: true, restored: true, settingsSaved: !!st.ok };
+      } catch (_) {
+        return { ok: false, reason: "error" };
+      } finally {
+        restoring = false;
+      }
+    }
   }
   /* Stops push on this device: removes its row, then the browser subscription. */
   async function deactivate(win) {
@@ -215,6 +269,7 @@
       ok = false;
     }
     setDevice(win, false);
+    setWanted(win, false);
     return { ok };
   }
   async function sendTest(win) {
@@ -306,7 +361,7 @@
     const today = o.today || ymd(now);
     const en = o.lang === "en";
     const format = typeof o.format === "function" ? o.format : typeof root.formatMoney === "function" ? root.formatMoney : fallbackMoney;
-    const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Mi Plan de Deudas//Pagos 1.4//" + (en ? "EN" : "ES"), "CALSCALE:GREGORIAN", "METHOD:PUBLISH", "X-WR-CALNAME:" + icsEscape(en ? "My payments" : "Mis pagos")];
+    const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//SolviPath//Pagos 1.9//" + (en ? "EN" : "ES"), "CALSCALE:GREGORIAN", "METHOD:PUBLISH", "X-WR-CALNAME:" + icsEscape(en ? "My payments" : "Mis pagos")];
     const used = new Set();
     let count = 0;
     (Array.isArray(debts) ? debts : []).forEach((debt, i) => {
@@ -324,7 +379,7 @@
       const description = (en ? "Minimum payment: " : "Pago mínimo: ") + amount + "\n" + (en ? "Confirm the date with your lender." : "Confirma la fecha con tu entidad.");
       lines.push(
         "BEGIN:VEVENT",
-        "UID:pago-" + id + "@mi-plan-de-deudas",
+        "UID:pago-" + id + "@solvipath.com",
         "DTSTAMP:" + stamp(now),
         "DTSTART;VALUE=DATE:" + start.replace(/-/g, ""),
         "DTEND;VALUE=DATE:" + addDays(start, 1).replace(/-/g, ""),
@@ -391,7 +446,7 @@
       const description = (ctx.en ? "Amount: " : "Monto: ") + ctx.format(g.amount, g.currency) + "\n" + (ctx.en ? "Frequency: " : "Frecuencia: ") + freq;
       lines.push(
         "BEGIN:VEVENT",
-        "UID:" + id + "@mi-plan-de-deudas",
+        "UID:" + id + "@solvipath.com",
         "DTSTAMP:" + stamp(ctx.now),
         "DTSTART;VALUE=DATE:" + start.replace(/-/g, ""),
         "DTEND;VALUE=DATE:" + addDays(start, 1).replace(/-/g, ""),
@@ -429,5 +484,5 @@
     }, 30000);
   }
 
-  return { DEVICE_KEY, detect, isIOS, isStandalone, deviceActive, setDevice, askAccount, activate, deactivate, sendTest, syncSettings, settingsRow, b64ToBytes, buildICS, downloadICS, icsEscape, fold, rrule, firstDue };
+  return { DEVICE_KEY, WANTED_KEY, restore, wanted, setWanted, detect, isIOS, isStandalone, deviceActive, setDevice, askAccount, activate, deactivate, sendTest, syncSettings, settingsRow, b64ToBytes, buildICS, downloadICS, icsEscape, fold, rrule, firstDue };
 });

@@ -17,7 +17,7 @@
 -- ---------------------------------------------------------------------
 -- ---------------------------------------------------------------------
 -- =====================================================================
--- Mi Plan de Deudas — esquema de nube para Supabase
+-- SolviPath — esquema de nube para Supabase
 -- =====================================================================
 -- Cómo usarlo: Supabase → SQL Editor → New query → pega TODO este archivo
 -- → Run. Se puede ejecutar más de una vez (es idempotente).

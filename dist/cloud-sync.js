@@ -56,6 +56,7 @@
     lastSync: null,
     error: null,
     recovery: false,
+    linkExpired: false,
     choice: null,
     notices: [],
     settingsChanged: false,
@@ -220,14 +221,41 @@
   function urlAuthError() {
     return /[?&#](error|error_description)=/.test(location.search + location.hash);
   }
+  /* 1.9: los enlaces de los correos siempre llevan al dominio oficial. Solo se usa el origen
+     actual en localhost (desarrollo) y en el propio dominio oficial, porque el inicio de sesión
+     seguro (PKCE) debe completarse en el mismo origen donde se pidió. */
+  const SITE_URL = "https://www.solvipath.com";
+  function siteBase() {
+    const h = String(location.hostname || "");
+    if (!h || h === "localhost" || h === "127.0.0.1" || h === "[::1]" || /\.localhost$/.test(h) || /(^|\.)solvipath\.com$/.test(h)) return location.origin;
+    return SITE_URL;
+  }
   function redirectUrl(kind) {
-    return location.origin + location.pathname + (kind ? "?mpdd=" + kind : "");
+    const base = siteBase();
+    return base + (base === location.origin ? location.pathname : "/") + (kind ? "?mpdd=" + kind : "");
+  }
+  const RECOVERY_KEY = "mpdd-recovery-pending";
+  function recoveryPending() {
+    try {
+      return ls.getItem(RECOVERY_KEY) === "1";
+    } catch (_) {
+      return false;
+    }
+  }
+  function setRecoveryPending(on) {
+    try {
+      if (on) ls.setItem(RECOVERY_KEY, "1");
+      else ls.removeItem(RECOVERY_KEY);
+    } catch (_) {}
   }
   function onAuth(event, session) {
     if (event === "PASSWORD_RECOVERY") {
       status.recovery = true;
+      setRecoveryPending(true);
       cleanUrl();
     }
+    // 1.9: la pantalla de nueva contraseña sobrevive a recargas y a la actualización del service worker.
+    if (session && session.user && recoveryPending()) status.recovery = true;
     if (session && session.user) {
       const changedUser = status.userId !== session.user.id;
       status.userId = session.user.id;
@@ -247,6 +275,7 @@
       const wasSignedIn = !!status.userId;
       status.userId = status.email = null;
       status.recovery = false;
+      setRecoveryPending(false);
       status.choice = null;
       try {
         ls.removeItem(ACTIVE_KEY);
@@ -267,12 +296,23 @@
     if (!e) return null;
     const code = String(e.code || ""),
       st = Number(e.status || 0),
-      name = String(e.name || "");
-    if (name === "AuthRetryableFetchError" || st === 0 || e.code === "network" || e instanceof TypeError) return "network";
-    if (st >= 500 && st !== 502 && st !== 503 && st !== 504) return "server";
+      name = String(e.name || ""),
+      msg = String(e.message || "");
+    // "Sin conexión" solo para fallos de red reales (la petición ni siquiera llegó al servidor).
+    if (e.code === "network" || e instanceof TypeError || (name === "AuthRetryableFetchError" && st === 0)) return "network";
     if (st === 429 || /rate_limit/.test(code)) return "rateLimit";
     if (code === "weak_password") return "weakPassword";
     if (code === "same_password") return "samePassword";
+    if (code === "user_already_exists" || code === "email_exists") return "userExists";
+    if (code === "email_not_confirmed") return "notConfirmed";
+    if (code === "email_address_invalid" || (code === "validation_failed" && /email/i.test(msg))) return "emailInvalid";
+    if (name === "AuthSessionMissingError") return "linkExpired";
+    if (code === "otp_expired" || code === "flow_state_not_found" || code === "flow_state_expired") return "linkExpired";
+    if (st >= 500 || code === "unexpected_failure") return "server";
+    // Detalle técnico solo para depurar: sin correo, contraseña ni tokens.
+    try {
+      console.error("[SolviPath] auth error", { status: st, code, name, message: msg.slice(0, 200) });
+    } catch (_) {}
     return "generic";
   }
   function validEmail(email) {
@@ -291,10 +331,12 @@
     }
   }
   const api = {};
+  const MIN_PASSWORD = 6;
+  api.minPassword = MIN_PASSWORD;
   api.signUp = async (email, password, accepted) => {
     email = String(email || "").trim();
     if (!validEmail(email)) return { ok: false, error: "email" };
-    if (String(password || "").length < 8) return { ok: false, error: "passwordLength" };
+    if (String(password || "").length < MIN_PASSWORD) return { ok: false, error: "passwordLength" };
     if (accepted !== true) return { ok: false, error: "terms" };
     const r = await authCall((c) =>
       c.auth.signUp({
@@ -303,9 +345,12 @@
         options: { emailRedirectTo: redirectUrl(), data: { terms_accepted_at: nowISO(), terms_version: "2026-11-14" } },
       }),
     );
-    // Never reveal whether the email was already registered.
-    if (!r.ok && r.error === "generic") return { ok: true, result: "checkEmail" };
-    if (r.ok) return { ok: true, result: r.data && r.data.session ? "signedIn" : "checkEmail" };
+    if (r.ok) {
+      const u = r.data && r.data.user;
+      // Supabase no da error si el correo ya existe: devuelve un usuario sin identidades.
+      if (u && Array.isArray(u.identities) && u.identities.length === 0) return { ok: false, error: "userExists" };
+      return { ok: true, result: r.data && r.data.session ? "signedIn" : "checkEmail" };
+    }
     return r;
   };
   api.signIn = async (email, password) => {
@@ -313,7 +358,19 @@
     if (!validEmail(email) || !password) return { ok: false, error: "credentials" };
     const r = await authCall((c) => c.auth.signInWithPassword({ email, password }));
     if (!r.ok && r.error === "generic") return { ok: false, error: "credentials" };
+    if (!r.ok && r.error === "server") return { ok: false, error: "generic" };
     return r;
+  };
+  api.resendSignup = async (email) => {
+    email = String(email || "").trim();
+    if (!validEmail(email)) return { ok: false, error: "email" };
+    const r = await authCall((c) => c.auth.resend({ type: "signup", email, options: { emailRedirectTo: redirectUrl() } }));
+    return r.ok ? { ok: true, result: "checkEmail" } : r;
+  };
+  api.linkExpired = () => status.linkExpired === true;
+  api.clearLinkExpired = () => {
+    status.linkExpired = false;
+    emit();
   };
   api.magicLink = async (email) => {
     email = String(email || "").trim();
@@ -330,10 +387,17 @@
     return r.ok ? { ok: true, result: "checkEmail" } : r;
   };
   api.updatePassword = async (password) => {
-    if (String(password || "").length < 8) return { ok: false, error: "passwordLength" };
+    if (String(password || "").length < MIN_PASSWORD) return { ok: false, error: "passwordLength" };
     const r = await authCall((c) => c.auth.updateUser({ password }));
     if (r.ok) {
       status.recovery = false;
+      setRecoveryPending(false);
+      emit();
+    } else if (r.error === "linkExpired") {
+      // La sesión de recuperación ya no es válida: hay que pedir otro correo.
+      status.recovery = false;
+      setRecoveryPending(false);
+      status.linkExpired = true;
       emit();
     }
     return r;
@@ -859,6 +923,7 @@
     status.userId = status.email = null;
     status.choice = null;
     status.recovery = false;
+    setRecoveryPending(false);
     deleting = false;
     lastPendingSig = null;
     let wiped = false;
@@ -1166,16 +1231,14 @@
       return { ok: false, error: "network" };
     }
   };
-  /* Best effort, before signing out: forget this device so the account stops sending to it. */
+  /* Best effort, before signing out: the account stops sending to this device. 1.9: la
+     suscripción del navegador y el permiso se conservan para volver a asociarlos al entrar de nuevo. */
   async function pushForgetDevice() {
     try {
       const sw = navigator.serviceWorker;
       const reg = sw && typeof sw.getRegistration === "function" ? await sw.getRegistration() : null;
       const sub = reg && reg.pushManager ? await reg.pushManager.getSubscription() : null;
-      if (sub) {
-        if (status.userId) await api.pushDeleteSubscription(sub.endpoint);
-        await sub.unsubscribe();
-      }
+      if (sub && status.userId) await api.pushDeleteSubscription(sub.endpoint);
     } catch (_) {}
     try {
       ls.removeItem(PUSH_DEVICE_KEY);
@@ -1303,6 +1366,7 @@
     if (urlAuthError() && !active) {
       // Expired or invalid email link: no need to contact the server.
       cleanUrl();
+      status.linkExpired = true;
       setState("signedOut", { pending: 0, error: "linkInvalid" });
       return;
     }

@@ -22,7 +22,7 @@ function eq(a: unknown, b: unknown, msg: string) {
   const ua = createECDH("prime256v1");
   ua.generateKeys();
   const auth = randomBytes(16);
-  const msg = JSON.stringify({ title: "Mi Plan de Deudas", body: "Hoy vence Tarjeta: $150.000 COP ñ", url: "/?vista=calendario" });
+  const msg = JSON.stringify({ title: "SolviPath", body: "Hoy vence Tarjeta: $150.000 COP ñ", url: "/?vista=calendario" });
   const body = await encrypt(new TextEncoder().encode(msg), b64url(ua.getPublicKey()), b64url(auth));
   const out = ece.decrypt(Buffer.from(body), { version: "aes128gcm", privateKey: ua, authSecret: auth });
   eq(out.toString("utf8"), msg, "cifrado RFC 8291 descifrable con http_ece");
@@ -101,7 +101,7 @@ ok(!allowedEndpoint("https://fcm.googleapis.com:8443/x"), "otro puerto");
   const in3 = remindersFor({ ...st, days_before: 3 }, new Date("2026-11-14T14:00:00Z"), debts.filter((d) => d.id === "a"), {});
   eq(in3.map((r) => r.body), ["Tarjeta vence en 3 días: $150.000 COP"], "aviso 3 días antes");
   const en = remindersFor({ ...st, lang: "en" }, now, debts.filter((d) => d.id === "b"), {});
-  eq(en.map((r) => [r.title, r.body]), [["My Debt Plan", "Préstamo is due today: US$30.00 USD"]], "inglés");
+  eq(en.map((r) => [r.title, r.body]), [["SolviPath", "Préstamo is due today: US$30.00 USD"]], "inglés");
   const planned = plannedFrom([{ debtId: "a", payment: 400000, dueDate: "2026-11-17" }], "2026-11-01");
   eq(remindersFor(st, now, debts.filter((d) => d.id === "a"), planned).map((r) => r.body), ["Mañana vence Tarjeta: $400.000 COP"], "usa el monto del plan");
   // Times rounded down to the quarter hour: 23:50 goes out at 23:45 (the task runs every 15 min).

@@ -1,4 +1,4 @@
-# Mi Plan de Deudas
+# SolviPath
 
 Aplicación web para registrar deudas, comparar estrategias de pago y administrar presupuestos y recordatorios.
 
@@ -72,6 +72,17 @@ La función está en `supabase/functions/delete-account/index.ts` y **no se ha d
 8. **Función para eliminar cuenta (cuando quieras activarla).** Con la [CLI de Supabase](https://supabase.com/docs/guides/cli): `supabase login`, `supabase link --project-ref TU_REF` y `supabase functions deploy delete-account`. O en el panel: *Edge Functions → Deploy a new function → Via Editor*, nombre `delete-account`, pega el contenido de `index.ts` y deja activo *Verify JWT*. Opcional: secreto `ALLOWED_ORIGINS` con tu dominio.
 9. **Publicar.** Sube `dist/` como siempre. Si cambias `config.js` después, no hace falta cambiar la versión del service worker: ese archivo se pide primero a la red.
 10. **Legal.** Completa los marcadores resaltados de `privacidad.html` y `terminos.html` (responsable, identificación, correo, región, retención) y haz que un abogado revise ambos textos antes de abrir las cuentas al público.
+
+## Versión 1.9 (incluye la corrección 1.8.1)
+
+- **Nombre SolviPath** en toda la app (pestaña, encabezado, inicio de sesión, manifest, metas, notificaciones, textos legales, correos y archivo de calendario) y lema «Tu camino a la tranquilidad financiera» / «Your path to financial peace of mind» bajo el logo.
+- **Dominio:** los enlaces de los correos (confirmación y recuperación) llevan a https://www.solvipath.com; en localhost y en el propio dominio se usa el origen actual para que el inicio de sesión seguro se complete en el mismo sitio. Se agregaron `canonical` y `og:url`.
+- **Registro:** «Sin conexión» solo aparece sin red real. Cada error de Supabase muestra su motivo (correo ya registrado, correo no válido, contraseña muy corta o débil, demasiados intentos, error al enviar el correo, otro error con detalle en la consola sin datos personales). Al crear la cuenta: aviso con la carpeta de spam y botón «Reenviar correo». Si falta confirmar el correo al entrar, mensaje claro y reenvío. Contraseña mínima: 6 caracteres.
+- **Recuperar contraseña:** pantalla «Crea tu nueva contraseña» (dos campos con ojo, mínimo 6, «Guardar contraseña»); el estado se guarda y sobrevive a recargas y a la actualización del service worker; enlace vencido o inválido → aviso y botón «Pedir otro correo».
+- **Notificaciones:** cerrar sesión ya no destruye la suscripción ni el permiso del navegador; al volver a entrar (o abrir la app con sesión) se vuelve a asociar a la cuenta activa sin pedir permiso. Si el permiso está bloqueado se explica cómo activarlo.
+- La función `enviar-recordatorios` usa el título «SolviPath» (hay que volver a desplegarla).
+- Volver a la 1.8: Netlify → *Deploys* → despliegue anterior → *Publish deploy*. No hay cambios en la base de datos.
+- Pendiente en Supabase (Authentication): host SMTP `smtp.resend.com`, Site URL y Redirect URLs con https://www.solvipath.com.
 
 ## Versión 1.8 (incluye lo planeado para la 1.7)
 
@@ -178,7 +189,7 @@ Requisitos: Node.js 20 o superior.
 ```bash
 cd tests
 npm install        # instala jsdom (solo para pruebas)
-npm test           # 185 pruebas automatizadas con DOM simulado
+npm test           # 202 pruebas automatizadas con DOM simulado
 npm run check      # node --check en todos los JS + recursos de HTML, service worker y manifiesto
 ```
 

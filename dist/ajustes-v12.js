@@ -38,7 +38,7 @@
     deniedIntro: "El navegador bloqueó las notificaciones de esta app. Para permitirlas:",
     denied1: "En el computador: toca el ícono junto a la dirección de la página, busca «Notificaciones» y elige «Permitir».",
     denied2: "En Android: abre Chrome, ve a Configuración → Configuración de sitios → Notificaciones y permite esta app.",
-    denied3: "En iPhone o iPad: abre Configuración → Notificaciones → Mi Plan de Deudas y activa «Permitir notificaciones».",
+    denied3: "En iPhone o iPad: abre Configuración → Notificaciones → SolviPath y activa «Permitir notificaciones».",
     denied4: "Luego vuelve aquí y toca «Activar notificaciones».",
     err_dismissed: "No diste permiso para las notificaciones. Puedes intentarlo de nuevo cuando quieras.",
     err_locked: "Hay una recuperación pendiente; no se guardó la preferencia.",
@@ -337,7 +337,12 @@
       }
       if (uid !== lastUser && st.state === "synced") {
         lastUser = uid;
-        if (pendingSync || (P && P.deviceActive(window))) syncSettings();
+        // 1.9: re-asocia la suscripción de este navegador a la cuenta activa (sin pedir permiso).
+        if (P && P.restore) P.restore(window).then((r) => {
+          refresh();
+          if (r && r.ok) enable.checked = true;
+        });
+        else if (pendingSync || (P && P.deviceActive(window))) syncSettings();
       }
     });
   window.addEventListener("online", () => {
@@ -369,6 +374,10 @@
     } catch (_) {}
   }
   refresh();
+  // 1.9: si el navegador bloqueó las notificaciones, explica cómo activarlas.
+  try {
+    if (P && P.detect(window) === "denied") explain("denied");
+  } catch (_) {}
 
   /* Calendar file: one monthly all-day event per debt with a due day. */
   const cal = el("div", "settings-block");
