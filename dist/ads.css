@@ -1,0 +1,7 @@
+/* 2.1: espacio publicitario. Solo existe en el DOM si ADS_ENABLED o ?ads=1 (ver ads.js). */
+.ad-slot{box-sizing:border-box;height:56px;display:flex;align-items:center;justify-content:center;overflow:hidden;color:#4f625f;font-size:13px}
+.ad-slot--preview{border:2px dashed #8aa39a;border-radius:10px;background:#f6f8f4}
+.ad-slot--bar{position:fixed;left:0;right:0;z-index:49;margin:0 max(10px,env(safe-area-inset-left));border-radius:10px}
+.ad-slot--card{margin:16px 0;border-radius:14px}
+body.has-ad-bar{padding-bottom:var(--ad-bar-space,0)}
+body:has(dialog[open]) .ad-slot--bar{visibility:hidden!important}

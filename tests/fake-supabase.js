@@ -16,6 +16,7 @@ class FakeServer {
     this.offline = false;
     this.calls = [];
     this.functionDeployed = true;
+    this.memberships = new Map();
     this.plans = new Map(); // uid -> debt_plans row (RLS: own row only)
     this.gastos = new Map(); // uid -> Map(id -> gastos_fijos row) (RLS: own rows only)
     this.trm = { status: 200, body: { fecha: "2026-11-15", valor: 4000, fuente: "Superintendencia Financiera de Colombia", desactualizada: false } };
@@ -347,6 +348,14 @@ function createFakeLib(server, win) {
               const me = uid();
               if (!me) return { data: null, error: { code: "42501", message: "rls" } };
               return server.pushTable(table, q.op, q.row, q.filters, me);
+            }
+            if (table === "membresias") {
+              // 2.1: solo lectura de la fila propia (RLS); nada se escribe desde el navegador.
+              const me = uid();
+              if (!me) return { data: null, error: { code: "42501", message: "rls" } };
+              if (q.op !== "select") return { data: null, error: { code: "42501", message: "new row violates row-level security" } };
+              const r = server.memberships.get(me);
+              return { data: r ? JSON.parse(JSON.stringify(r)) : null, error: null };
             }
             if (table === "gastos_fijos") {
               const me = uid();

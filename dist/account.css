@@ -66,3 +66,6 @@ header .top .language-control,header .top .account-header{align-self:center}
 @media(max-width:400px){header .brand i{width:44px;height:44px;margin-right:10px}header .top{gap:6px 4px}header .top .language-control select{min-width:0}}
 /* 2.0: pie con la empresa y enlaces legales */
 .auth-copyright{margin:2px 0 0;font-size:12px;color:#4f625f}.legal-links{line-height:1.8}
+/* 2.1: sección Membresía */
+.membership-plan{font-weight:700;margin:6px 0}.membership-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:8px 0}.membership-row button:disabled{opacity:.55;cursor:not-allowed}.membership-soon{font-size:13px;color:#4f625f;font-weight:600}
+#membership-plan{font-size:16px;font-weight:700;margin:6px 0}

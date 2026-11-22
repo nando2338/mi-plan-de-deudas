@@ -1,5 +1,11 @@
 # Comprobaciones
 
+## Versión 2.1 (22 de noviembre de 2026)
+
+- Pruebas nuevas en `tests/v21.test.js` (12): esPremium, anuncios apagados por defecto, sin SDK de terceros, `?ads=1`, tarjeta entre deudas, diálogos y distancia de 16 px, Premium, sección Membresía y políticas.
+- Comprobado en la base real: permisos de `membresias` (anon sin acceso; authenticated solo SELECT; service_role completo), política de lectura propia y cascada con `auth.users`.
+- No probado: lectura de una membresía real con una cuenta real desde www.solvipath.com; el borrado en cascada de una fila real (solo se comprobó la regla en el catálogo).
+
 ## Versión 2.0 (20 de noviembre de 2026)
 
 - Pruebas automáticas nuevas en `tests/v20.test.js` (legales ES/EN, formulario de eliminación, casilla de 18 años, enlaces, borrado de cuenta, encabezado, caché y base de datos).

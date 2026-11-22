@@ -1160,6 +1160,19 @@
       return { ok: false, error: "network" };
     }
   };
+  /* 2.1: membresía Premium. Solo LEE la fila propia (RLS); nada se escribe desde el navegador. */
+  api.fetchMembership = async () => {
+    if (!status.userId) return { ok: false, error: "notSignedIn" };
+    if (navigator.onLine === false) return { ok: false, error: "network" };
+    try {
+      const c = await getClient();
+      const { data, error } = await c.from("membresias").select("plan,activa,vence_en").eq("user_id", status.userId).maybeSingle();
+      if (error) return { ok: false, error: "server" };
+      return { ok: true, row: data || null, userId: status.userId };
+    } catch (_) {
+      return { ok: false, error: "network" };
+    }
+  };
   api.pushSaveSettings = async (s) => {
     if (!status.userId) return { ok: false, error: "notSignedIn" };
     if (navigator.onLine === false) return { ok: false, error: "network" };

@@ -31,8 +31,8 @@ const visible = (dom) => [...dom.window.document.querySelectorAll("main > sectio
 
 test("privacidad y términos: textos finales en inglés y español, sin borradores ni marcadores", () => {
   for (const [file, h2, en, es, key] of [
-    ["privacidad.html", 14, "Privacy Policy — SolviPath", "Política de privacidad — SolviPath", "Last updated: November 20, 2026."],
-    ["terminos.html", 12, "Terms of Use — SolviPath", "Términos de uso — SolviPath", "Last updated: November 20, 2026."],
+    ["privacidad.html", 15, "Privacy Policy — SolviPath", "Política de privacidad — SolviPath", "Last updated: November 22, 2026."],
+    ["terminos.html", 13, "Terms of Use — SolviPath", "Términos de uso — SolviPath", "Last updated: November 22, 2026."],
   ]) {
     const html = read("dist/" + file);
     assert.doesNotMatch(html, /BORRADOR|DRAFT|<mark|\[NOMBRE|\[CORREO|\[REGI|\[CONFIRMAR|abogado/i, file);
@@ -44,12 +44,12 @@ test("privacidad y términos: textos finales en inglés y español, sin borrador
     assert.equal(en1.querySelectorAll("h2").length, h2, file + " EN");
     assert.equal(es1.querySelectorAll("h2").length, h2, file + " ES");
     assert.ok(en1.textContent.includes(key));
-    assert.ok(es1.textContent.includes("Última actualización: 20 de noviembre de 2026."));
+    assert.ok(es1.textContent.includes("Última actualización: 22 de noviembre de 2026."));
     assert.ok(en1.textContent.includes("privacy@solvipath.com") && es1.textContent.includes("privacy@solvipath.com"));
     assert.ok(en1.textContent.includes("FixRight Home Renovations LLC") && es1.textContent.includes("FixRight Home Renovations LLC"));
   }
   const p = new JSDOM(read("dist/privacidad.html")).window.document;
-  assert.ok(p.querySelector('section[lang="en"]').textContent.includes("we do not sell your data and we do not show ads"));
+  assert.ok(p.querySelector('section[lang="en"]').textContent.includes("and we do not sell your data."));
   assert.ok(p.querySelector('section[lang="es"]').textContent.includes("Ley 1581 de 2012"));
   assert.ok(p.querySelector('section[lang="en"]').textContent.includes("Global Privacy Control"));
   const t = new JSDOM(read("dist/terminos.html")).window.document;
@@ -260,9 +260,9 @@ test("encabezado: tamaños nuevos en celular y escritorio, lema que pasa a dos l
 });
 
 test("versión 2.0 en la app y en el caché; el service worker conoce las tres páginas legales", () => {
-  assert.match(read("dist/app-version.js"), /VERSION='2\.0'/);
+  assert.match(read("dist/app-version.js"), /VERSION='2\.\d'/);
   const sw = read("dist/sw.js");
-  assert.match(sw, /CACHE='mpd-cache-v2\.0'/);
+  assert.match(sw, /CACHE='mpd-cache-v2\.\d'/);
   for (const f of ["/privacidad.html", "/terminos.html", "/eliminar-cuenta.html", "/eliminar-cuenta.js", "/legal.css", "/legal.js"]) assert.ok(sw.includes("'" + f + "'"), f);
   assert.match(sw, /NETWORK_FIRST=\[[^\]]*'\/eliminar-cuenta\.html'/);
 });

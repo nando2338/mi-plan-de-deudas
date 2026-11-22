@@ -73,6 +73,13 @@ La función está en `supabase/functions/delete-account/index.ts` y está desple
 9. **Publicar.** Sube `dist/` como siempre. Si cambias `config.js` después, no hace falta cambiar la versión del service worker: ese archivo se pide primero a la red.
 10. **Legal.** Completa los marcadores resaltados de `privacidad.html` y `terminos.html` (responsable, identificación, correo, región, retención) y haz que un abogado revise ambos textos antes de abrir las cuentas al público.
 
+## Versión 2.1
+
+- **Espacio publicitario (`dist/ads.js`, `dist/ads.css`):** componente `MPDDAds.createSlot("bar" | "card")`, apagado por defecto con `ADS_ENABLED = false` (no dibuja nada ni ocupa espacio). Con `?ads=1` en la URL dibuja una caja punteada «Espacio publicitario» de 56 px: una barra fija encima de la navegación inferior y una tarjeta entre las deudas. No se muestra con Premium, con un cuadro de diálogo abierto (inicio de sesión, registro…), ni a menos de 16 px de «Agregar deuda», «Registrar pago»/«Pagar» y «Eliminar». Las páginas legales no lo cargan. No hay SDK ni scripts de terceros.
+- **Membresía (`dist/membresia.js`, migración `20261122000000_v2_1_membresias.sql`):** tabla `public.membresias` (RLS: el usuario solo lee su fila; nadie escribe desde el navegador; se borra en cascada con la cuenta). `MPDDMembership.esPremium(fila)` es verdadero si `activa = true` y `vence_en` es nulo o futuro. En Más → Membresía se muestra «Plan gratuito» o «Premium hasta DD/MM/AAAA» y el botón «Quitar anuncios» deshabilitado con «Próximamente».
+- **Políticas:** nueva sección «Publicidad y membresía» (privacidad §13, términos §8), sin la frase «sin anuncios», fecha 22 de noviembre de 2026.
+- Para dar Premium a alguien de prueba (en el SQL Editor de Supabase): `insert into public.membresias (user_id, plan, activa, vence_en) values ('UUID', 'premium', true, now() + interval '30 days') on conflict (user_id) do update set plan = excluded.plan, activa = excluded.activa, vence_en = excluded.vence_en;`
+
 ## Versión 2.0
 
 - **Encabezado:** logo 44 px (52 px en escritorio), nombre 22/26 px, lema 13/14 px en verde claro (pasa a dos líneas en pantallas angostas) y estado de sincronización a 12 px con más contraste.
