@@ -1,0 +1,21 @@
+{
+  "name": "solvipath",
+  "version": "3.0.0",
+  "private": true,
+  "description": "SolviPath: web estática (dist/) y empaquetado Android con Capacitor",
+  "scripts": {
+    "cap:sync": "cap sync android",
+    "assets": "capacitor-assets generate --android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.6.2",
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/browser": "^8.0.5",
+    "@capacitor/cli": "^8.6.2",
+    "@capacitor/core": "^8.6.2",
+    "@capacitor/local-notifications": "^8.3.1"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^4.0.0"
+  }
+}

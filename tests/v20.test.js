@@ -260,9 +260,9 @@ test("encabezado: tamaños nuevos en celular y escritorio, lema que pasa a dos l
 });
 
 test("versión 2.0 en la app y en el caché; el service worker conoce las tres páginas legales", () => {
-  assert.match(read("dist/app-version.js"), /VERSION='2\.\d(\.\d+)?'/);
+  assert.match(read("dist/app-version.js"), /VERSION='[23]\.\d(\.\d+)?'/);
   const sw = read("dist/sw.js");
-  assert.match(sw, /CACHE='mpd-cache-v2\.\d(\.\d+)?'/);
+  assert.match(sw, /CACHE='mpd-cache-v[23]\.\d(\.\d+)?'/);
   for (const f of ["/privacidad.html", "/terminos.html", "/eliminar-cuenta.html", "/eliminar-cuenta.js", "/legal.css", "/legal.js"]) assert.ok(sw.includes("'" + f + "'"), f);
   assert.match(sw, /NETWORK_FIRST=\[[^\]]*'\/eliminar-cuenta\.html'/);
 });

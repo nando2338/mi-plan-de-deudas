@@ -215,9 +215,9 @@ test("políticas: sección 'Publicidad y membresía' en ES y EN, sin 'sin anunci
 });
 
 test("versión 2.1, caché v2.1 y archivos nuevos en el service worker; migración de membresías", () => {
-  assert.match(read("dist/app-version.js"), /VERSION='2\.1(\.\d+)?'/);
+  assert.match(read("dist/app-version.js"), /VERSION='[23]\.\d(\.\d+)?'/);
   const sw = read("dist/sw.js");
-  assert.match(sw, /CACHE='mpd-cache-v2\.1(\.\d+)?'/);
+  assert.match(sw, /CACHE='mpd-cache-v[23]\.\d(\.\d+)?'/);
   for (const f of ["/ads.js", "/ads.css", "/membresia.js"]) assert.ok(sw.includes("'" + f + "'"), f);
   const mig = read("supabase/migrations/20261122000000_v2_1_membresias.sql");
   assert.match(mig, /user_id\s+uuid primary key references auth\.users \(id\) on delete cascade/);

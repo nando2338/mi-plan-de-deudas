@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.solvipath.app",
+      "sha256_cert_fingerprints": [
+        "REEMPLAZA_CON_LA_HUELLA_SHA256_DE_LA_LLAVE_DE_FIRMA_DE_GOOGLE_PLAY"
+      ]
+    }
+  }
+]

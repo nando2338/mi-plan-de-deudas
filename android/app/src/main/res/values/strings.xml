@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">SolviPath</string>
+    <string name="title_activity_main">SolviPath</string>
+    <string name="package_name">com.solvipath.app</string>
+    <string name="custom_url_scheme">com.solvipath.app</string>
+</resources>

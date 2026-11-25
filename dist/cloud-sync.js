@@ -230,7 +230,18 @@
     if (!h || h === "localhost" || h === "127.0.0.1" || h === "[::1]" || /\.localhost$/.test(h) || /(^|\.)solvipath\.com$/.test(h)) return location.origin;
     return SITE_URL;
   }
+  /* 3.0: en la app de Android (Capacitor) los enlaces de los correos vuelven a la app con un
+     enlace propio; la sesión se completa en native.js con api.handleAuthUrl(). */
+  const NATIVE_REDIRECT = "com.solvipath.app://auth/callback";
+  function isNativeApp() {
+    try {
+      return !!(window.Capacitor && typeof window.Capacitor.isNativePlatform === "function" && window.Capacitor.isNativePlatform());
+    } catch (_) {
+      return false;
+    }
+  }
   function redirectUrl(kind) {
+    if (isNativeApp()) return NATIVE_REDIRECT + (kind === "recovery" ? "/recovery" : "");
     const base = siteBase();
     return base + (base === location.origin ? location.pathname : "/") + (kind ? "?mpdd=" + kind : "");
   }
@@ -1364,6 +1375,39 @@
   });
   api.syncGastos = () => gastosSync();
   /* ================= fin 1.8 Gastos fijos ================= */
+
+  /* 3.0: completa el inicio de sesión (PKCE) cuando un enlace del correo abre la app de Android. */
+  api.handleAuthUrl = async (url) => {
+    try {
+      const u = new URL(String(url));
+      const code = u.searchParams.get("code");
+      const hashErr = new URLSearchParams(String(u.hash || "").replace(/^#/, "")).get("error_description");
+      if (!code) {
+        if (u.searchParams.get("error_description") || hashErr) {
+          status.linkExpired = true;
+          setState("signedOut", { pending: 0, error: "linkInvalid" });
+          return { ok: false, error: "linkInvalid" };
+        }
+        return { ok: false, error: "nocode" };
+      }
+      const recovery = /\/recovery\/?$/.test(u.pathname) || u.searchParams.get("mpdd") === "recovery";
+      if (recovery) setRecoveryPending(true);
+      setState("starting");
+      const c = await getClient();
+      const r = await c.auth.exchangeCodeForSession(code);
+      if (r && r.error) {
+        if (recovery) setRecoveryPending(false);
+        status.linkExpired = true;
+        setState("signedOut", { pending: 0, error: "linkInvalid" });
+        return { ok: false, error: "linkInvalid" };
+      }
+      if (r && r.data && r.data.session && !status.userId) onAuth("SIGNED_IN", r.data.session);
+      return { ok: true, recovery };
+    } catch (e) {
+      setState("signedOut", { pending: 0, error: e && e.code === "network" ? "network" : "generic" });
+      return { ok: false, error: "generic" };
+    }
+  };
 
   /* ---------------- boot ---------------- */
   let bootTimer = null;

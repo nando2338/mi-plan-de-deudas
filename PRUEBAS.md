@@ -204,3 +204,11 @@ Fuente revisada: versión 12 publicada del sitio, commit de origen `b881ea8fd30a
 2. El círculo con tu inicial debe verse arriba a la derecha, junto al idioma.
 3. Tócalo: el panel con tu correo, «Mi cuenta» y «Cerrar sesión» debe verse completo dentro de la pantalla.
 4. Toca fuera, elige una opción o pulsa Escape: el panel se cierra.
+
+## 3.0 — app de Android
+Ver la lista completa en `ANDROID.md`. En el celular, con el APK instalado:
+1. Se abre con la pantalla verde oscura y el encabezado no queda tapado por la barra de estado; la barra inferior no queda tapada por la barra de gestos.
+2. Botón atrás: cierra un diálogo, luego el menú del perfil; en Inicio sale de la app.
+3. Más → Política de privacidad / Términos / Eliminar cuenta: se abren en el navegador.
+4. Crear cuenta con un correo real: el enlace del correo abre la app y entra a la sesión. Lo mismo con «Olvidé mi contraseña» (pantalla de nueva contraseña).
+5. Más → Avisos de pago en este teléfono → Activar avisos: pide el permiso y programa los avisos; cierra la app y espera la hora del aviso.

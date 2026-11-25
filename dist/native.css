@@ -1,0 +1,19 @@
+/* 3.0: ajustes solo para la app de Android (Capacitor). En la web esta hoja no cambia nada:
+   todo está bajo la clase html.native-app, que solo native.js agrega dentro de la app. */
+html.native-app{
+  --sat:max(env(safe-area-inset-top,0px),var(--safe-area-inset-top,0px));
+  --sab:max(env(safe-area-inset-bottom,0px),var(--safe-area-inset-bottom,0px));
+  --sal:max(env(safe-area-inset-left,0px),var(--safe-area-inset-left,0px));
+  --sar:max(env(safe-area-inset-right,0px),var(--safe-area-inset-right,0px));
+  -webkit-tap-highlight-color:transparent;
+}
+html.native-app header{padding-top:calc(23px + var(--sat))}
+html.native-app .bottom-nav{padding-bottom:calc(5px + var(--sab));padding-left:max(10px,var(--sal));padding-right:max(10px,var(--sar))}
+html.native-app body{padding-bottom:var(--sab)}
+html.native-app .update-banner{display:none}
+html.native-app #installApp,html.native-app #installHelp{display:none!important}
+.native-reminders{margin:8px 0 18px}
+.native-reminders .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:10px 0}
+.native-reminders .row label{font-weight:700}
+.native-reminders select,.native-reminders input[type=time]{min-height:44px;border:1px solid var(--line,#e1e8e1);border-radius:10px;padding:0 10px;background:#fff}
+.native-reminders .status{margin:8px 0 0;color:var(--muted,#657875)}

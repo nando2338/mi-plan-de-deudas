@@ -217,3 +217,10 @@ Esta copia parte de la versión publicada 12 del sitio, con el selector de moned
 - El panel del menú se ancla a la derecha del avatar, mide como máximo `min(280px, 100vw − 24px)`, queda por encima del contenido y nunca se sale de la pantalla (ajuste en `account-ui.js`).
 - Se cierra al tocar fuera, al elegir una opción y con Escape.
 - Comprobado en Chrome (Playwright) a 360×800, 390×844 y 430×932, en español e inglés. No probado en un iPhone/Safari real.
+
+## Versión 3.0 — app de Android (Capacitor)
+- Se agregó `capacitor.config.json`, la carpeta `android/` y `dist/native.js` + `dist/native.css` (solo actúan dentro de la app). La web publicada en Netlify no cambia.
+- Íconos adaptativos y pantalla de inicio generados con `@capacitor/assets` desde `assets/` (fondo `#0b1f1d`).
+- Áreas seguras, botón «atrás», enlaces externos al navegador, enlaces de correo (`com.solvipath.app://auth/callback`) y avisos de pago con notificaciones locales (canal «Recordatorios de pago»).
+- Workflow `.github/workflows/android.yml`: APK de depuración y AAB firmado desde GitHub Secrets.
+- Guía completa, llave de firma y pasos manuales: **[ANDROID.md](ANDROID.md)**.

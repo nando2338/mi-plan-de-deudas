@@ -1,0 +1,85 @@
+# Compila la app de Android (Capacitor) y sube los resultados como artefactos.
+#   - APK de depuración: siempre (se instala directo en un celular para probar).
+#   - AAB de release firmado: solo si existen los 4 Secrets de la llave de subida.
+# La llave de firma NUNCA está en el repositorio: se lee de GitHub Secrets.
+name: Android
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, v3.0-capacitor]
+    paths:
+      - "android/**"
+      - "assets/**"
+      - "capacitor.config.json"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/android.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      # Secrets (se pasan por entorno para poder comprobar si existen)
+      KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+      KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+      KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+      KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+      VERSION_CODE: ${{ github.run_number }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: "platform-tools platforms;android-36 build-tools;36.0.0"
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Copiar la web (dist) y los plugins a Android
+        run: npx cap sync android
+
+      - name: APK de depuración
+        working-directory: android
+        run: ./gradlew --no-daemon assembleDebug
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: solvipath-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+      - name: AAB de release (solo con la llave en Secrets)
+        id: release
+        if: env.KEYSTORE_BASE64 != '' && env.KEYSTORE_PASSWORD != '' && env.KEY_ALIAS != '' && env.KEY_PASSWORD != ''
+        working-directory: android
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/upload.jks"
+          KEYSTORE_PATH="$RUNNER_TEMP/upload.jks" ./gradlew --no-daemon bundleRelease
+          rm -f "$RUNNER_TEMP/upload.jks"
+
+      - uses: actions/upload-artifact@v4
+        if: steps.release.outcome == 'success'
+        with:
+          name: solvipath-release-aab
+          path: android/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+
+      - name: Aviso si falta la llave
+        if: steps.release.outcome == 'skipped'
+        run: |
+          echo "::notice::No hay llave de firma en los Secrets. Se compilo solo el APK de depuracion. Ver ANDROID.md."

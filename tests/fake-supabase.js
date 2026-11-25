@@ -263,6 +263,7 @@ function createFakeLib(server, win) {
           return { data: { session, user: session.user }, error: null };
         },
         async signUp({ email, password, options: o }) {
+          server.lastSignUpRedirect = o && o.emailRedirectTo;
           server.calls.push(["signUp", email, o && o.data]);
           const off = net();
           if (off) return off;
@@ -296,6 +297,16 @@ function createFakeLib(server, win) {
         async resend(args) {
           server.calls.push(["resend", args && args.email, args && args.options]);
           return net() || (server.resendError ? { data: {}, error: server.resendError } : { data: {}, error: null });
+        },
+        // 3.0: enlaces de correo que abren la app (PKCE): "mala" simula un código vencido.
+        async exchangeCodeForSession(code) {
+          server.calls.push(["exchange", code]);
+          if (code === "mala") return { data: { session: null }, error: { status: 400, code: "flow_state_not_found", message: "invalid" } };
+          const [email, u] = [...server.users.entries()][0];
+          const session = { access_token: "fake-token-" + u.id, user: { id: u.id, email } };
+          ls.setItem(storageKey, JSON.stringify(session));
+          emit(server.exchangeEvent || "SIGNED_IN", session);
+          return { data: { session }, error: null };
         },
         async signOut() {
           server.calls.push(["signOut"]);

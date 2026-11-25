@@ -92,6 +92,6 @@ test("CSS móvil: avatar y selector de idioma en la fila superior; panel anclado
 });
 
 test("versión 2.1.1 y caché v2.1.1 del service worker", () => {
-  assert.match(read("dist/app-version.js"), /VERSION='2\.1\.1'/);
-  assert.match(read("dist/sw.js"), /CACHE='mpd-cache-v2\.1\.1'/);
+  assert.match(read("dist/app-version.js"), /VERSION='(2\.1\.1|3\.\d(\.\d+)?)'/);
+  assert.match(read("dist/sw.js"), /CACHE='mpd-cache-v(2\.1\.1|3\.\d(\.\d+)?)'/);
 });
