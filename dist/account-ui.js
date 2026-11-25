@@ -819,8 +819,32 @@
   headerBox.append(enterBtn, avatar, menu);
   const top = document.querySelector("header .top");
   if (top) top.append(headerBox);
+  // El panel nunca se sale de la pantalla: se ancla a la derecha del avatar y, si aun así
+  // queda fuera por algún lado, se desplaza lo justo (o se ancla a la izquierda).
+  const EDGE = 12;
+  function keepMenuInside() {
+    menu.style.transform = "";
+    menu.style.left = "";
+    menu.style.right = "";
+    let r = menu.getBoundingClientRect();
+    if (!r.width) return;
+    const vw = document.documentElement.clientWidth || window.innerWidth;
+    if (r.left < EDGE) {
+      menu.style.left = "0";
+      menu.style.right = "auto";
+      r = menu.getBoundingClientRect();
+    }
+    let dx = 0;
+    if (r.right > vw - EDGE) dx = vw - EDGE - r.right;
+    if (r.left + dx < EDGE) dx = EDGE - r.left;
+    if (dx) menu.style.transform = "translateX(" + Math.round(dx) + "px)";
+  }
+  window.addEventListener("resize", () => {
+    if (!menu.hidden) keepMenuInside();
+  });
   function openMenu() {
     menu.hidden = false;
+    keepMenuInside();
     avatar.setAttribute("aria-expanded", "true");
     const first = menu.querySelector("button");
     if (first && first.focus) first.focus();

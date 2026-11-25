@@ -198,3 +198,9 @@ La segunda verificación del revisor confirmó las correcciones; el caso parcial
 ## Revisión anterior (transferencia, versión 12)
 
 Fuente revisada: versión 12 publicada del sitio, commit de origen `b881ea8fd30a58779f9eadeeee690ba1ef595f29`. Con datos ficticios: sintaxis, integridad de recursos, cálculos financieros, comparación de estrategias, selector de moneda, ayudas, recordatorios, validación, respaldo, restauración, cuota, recuperación y conflicto simulado: aprobados. Esas pruebas se ejecutaron en el entorno de desarrollo original y sus archivos no formaban parte de la transferencia.
+
+## 2.1.1 — menú del perfil en móvil
+1. Abre la app con sesión iniciada en un celular (o ancho de 360–430 px).
+2. El círculo con tu inicial debe verse arriba a la derecha, junto al idioma.
+3. Tócalo: el panel con tu correo, «Mi cuenta» y «Cerrar sesión» debe verse completo dentro de la pantalla.
+4. Toca fuera, elige una opción o pulsa Escape: el panel se cierra.

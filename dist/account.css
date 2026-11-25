@@ -69,3 +69,15 @@ header .top .language-control,header .top .account-header{align-self:center}
 /* 2.1: sección Membresía */
 .membership-plan{font-weight:700;margin:6px 0}.membership-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:8px 0}.membership-row button:disabled{opacity:.55;cursor:not-allowed}.membership-soon{font-size:13px;color:#4f625f;font-weight:600}
 #membership-plan{font-size:16px;font-weight:700;margin:6px 0}
+/* 2.1.1: en celular el avatar va en la fila superior, a la derecha, junto al selector de idioma */
+.account-menu{width:min(280px,calc(100vw - 24px));min-width:0;max-width:none;right:0;left:auto;z-index:200;box-sizing:border-box;overflow-wrap:anywhere}
+.account-menu-email{overflow-wrap:anywhere;word-break:break-word}
+.account-avatar{flex:none}
+@media(max-width:560px){
+header .top{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px}
+header .top .brand{order:0;flex:1 1 0;min-width:0}
+header .top .language-control{order:1;flex:none;margin-left:0}
+header .top .account-header{order:2;flex:none;margin-left:0}
+header .top .private{order:3;flex:0 0 100%}
+}
+@media(max-width:400px){header .top .language-control select{width:72px;min-width:0;padding:0}header .top .brand i{width:40px;height:40px;margin-right:8px}header .brand-tagline{font-size:12px}}

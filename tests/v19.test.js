@@ -390,6 +390,6 @@ test("notificaciones: el ícono usa el logo nuevo (sin león)", () => {
 });
 
 test("versión 1.9 en la app y en el caché del service worker", () => {
-  assert.match(fs.readFileSync(path.join(ROOT, "dist/app-version.js"), "utf8"), /VERSION='(1\.9|2\.\d)'/);
-  assert.match(fs.readFileSync(path.join(ROOT, "dist/sw.js"), "utf8"), /CACHE='mpd-cache-v(1\.9|2\.\d)'/);
+  assert.match(fs.readFileSync(path.join(ROOT, "dist/app-version.js"), "utf8"), /VERSION='(1\.9|2\.\d(\.\d+)?)'/);
+  assert.match(fs.readFileSync(path.join(ROOT, "dist/sw.js"), "utf8"), /CACHE='mpd-cache-v(1\.9|2\.\d(\.\d+)?)'/);
 });

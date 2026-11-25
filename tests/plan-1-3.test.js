@@ -436,7 +436,7 @@ test("textos del plan traducidos al inglés y versión 1.3", async () => {
   assert.match(e.doc.querySelector(".plan-wizard").textContent, /Step 1 of 5/);
   assert.match(e.doc.querySelector(".plan-wizard").textContent, /How much money comes in each month\?/);
   const sw = fs.readFileSync(path.join(__dirname, "..", "dist", "sw.js"), "utf8");
-  assert.match(sw, /mpd-cache-v(1\.[3-9]|2\.\d)/);
+  assert.match(sw, /mpd-cache-v(1\.[3-9]|2\.\d(\.\d+)?)/);
   for (const f of ["/plan-core.js", "/plan-ui.js", "/plan.css"]) assert.ok(sw.includes("'" + f + "'"), f);
 });
 

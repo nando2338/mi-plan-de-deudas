@@ -315,7 +315,7 @@ test("actualización: aviso 'Nueva versión disponible – Actualizar' y salto d
 
 test("service worker y Netlify: caché por versión, borra cachés viejos, sin caché de index.html ni sw.js", () => {
   const sw = fs.readFileSync(path.join(__dirname, "..", "dist", "sw.js"), "utf8");
-  assert.match(sw, /const CACHE='mpd-cache-v\d+\.\d+'/);
+  assert.match(sw, /const CACHE='mpd-cache-v\d+\.\d+(\.\d+)?'/);
   assert.match(sw, /SKIP_WAITING/);
   assert.match(sw, /startsWith\('deudas-pwa-'\)\|\|k\.startsWith\('mpd-cache-'\)/);
   assert.match(sw, /cache:'reload'/);
@@ -325,7 +325,7 @@ test("service worker y Netlify: caché por versión, borra cachés viejos, sin c
   assert.match(toml, /publish = "dist"/);
   for (const p of ["/", "/index.html", "/sw.js"]) assert.match(toml, new RegExp('for = "' + p.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&") + '"\\s*\\n\\s*\\[headers\\.values\\]\\s*\\n\\s*Cache-Control = "no-cache, no-store, must-revalidate"'));
   const version = fs.readFileSync(path.join(__dirname, "..", "dist", "app-version.js"), "utf8");
-  assert.match(version, /VERSION='\d+\.\d+'/);
+  assert.match(version, /VERSION='\d+\.\d+(\.\d+)?'/);
   // Each release must change the cache name together with the visible version.
   const v = version.match(/VERSION='([^']+)'/)[1];
   assert.equal(sw.match(/const CACHE='([^']+)'/)[1], "mpd-cache-v" + v, "CACHE debe ser mpd-cache-v<versión>");

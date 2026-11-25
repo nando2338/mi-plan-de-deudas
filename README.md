@@ -211,3 +211,9 @@ npm run check      # node --check en todos los JS + recursos de HTML, service wo
 Ver `PRUEBAS.md` para el detalle de lo probado y lo que falta por probar.
 
 Esta copia parte de la versión publicada 12 del sitio, con el selector de moneda y las ayudas educativas. No incluye deudas personales ni credenciales.
+
+## Versión 2.1.1 — menú del perfil en móvil
+- En celular (≤560 px) el avatar queda en la fila superior, a la derecha, junto al selector de idioma; el logo y el nombre ocupan el espacio restante.
+- El panel del menú se ancla a la derecha del avatar, mide como máximo `min(280px, 100vw − 24px)`, queda por encima del contenido y nunca se sale de la pantalla (ajuste en `account-ui.js`).
+- Se cierra al tocar fuera, al elegir una opción y con Escape.
+- Comprobado en Chrome (Playwright) a 360×800, 390×844 y 430×932, en español e inglés. No probado en un iPhone/Safari real.
